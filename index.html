@@ -309,21 +309,15 @@
     .sidebar {
       width: var(--sidebar-width);
       background: var(--blue-dark);
-      height: 100vh;
-      max-height: 100vh;
+      min-height: 100vh;
       position: fixed;
       right: 0;
       top: 0;
       z-index: 100;
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
-      -webkit-overflow-scrolling: touch;
       transition: transform .3s ease
     }
-
-    .sidebar-nav { overflow-y: auto; }
-    .sidebar-footer { flex-shrink: 0; }
 
     .sidebar-logo {
       padding: 28px 24px 20px;
@@ -1962,6 +1956,102 @@
         padding: 9px 6px
       }
     }
+
+    /* ══════ Precision Responsive Polish (all screens) ══════ */
+    /* Ultra-wide monitors */
+    @media (min-width: 1600px) {
+      .content { padding: 30px 40px; max-width: 1600px; margin-left: auto; margin-right: auto; }
+      .stats-grid { gap: 20px; }
+    }
+    /* Large tablets & small laptops (fill the tablet gap 1025-1180) */
+    @media (min-width: 1025px) and (max-width: 1180px) {
+      :root { --sidebar-width: 220px; }
+      .content { padding: 22px 24px; }
+      .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+      .stat-value { font-size: 22px; }
+      .stat-card { padding: 18px 14px; }
+      .dashboard-grid { grid-template-columns: 1fr 1fr; }
+      .page-header { flex-wrap: wrap; gap: 10px; }
+    }
+    /* Portrait tablet tighter */
+    @media (min-width: 769px) and (max-width: 1024px) {
+      .page-header { flex-wrap: wrap; gap: 10px; }
+      .search-bar { flex-wrap: wrap; }
+      .export-bar { flex-wrap: wrap; }
+      .topbar-actions { gap: 8px; }
+      .topbar-sub { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .modal { max-width: 92vw; }
+    }
+    /* Landscape phones — short viewport, wider width */
+    @media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+      .sidebar { height: 100vh; overflow-y: auto; }
+      #setup-screen, #login-screen { padding-top: 20px; align-items: flex-start; }
+      .auth-box { padding: 20px 22px; }
+      .modal { max-height: 96vh; }
+      .topbar { padding: 8px 12px; }
+    }
+    /* Any mobile — safe-area & touch targets */
+    @media (max-width: 768px) {
+      .topbar { padding-top: max(11px, env(safe-area-inset-top)); }
+      .sidebar { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+      .toast { bottom: calc(14px + env(safe-area-inset-bottom)); }
+      .modal { padding-bottom: env(safe-area-inset-bottom); }
+      .btn { min-height: 36px; }
+      .btn-sm { min-height: 30px; }
+      /* Prevent iOS zoom on input focus */
+      input, select, textarea { font-size: 16px !important; }
+      /* Long-word breaking to stop horizontal overflow */
+      .card-title, .page-title, .topbar-title, .detail-value, .stat-label { word-break: break-word; overflow-wrap: anywhere; }
+      /* Ensure modals get some breathing room from top */
+      .modal-overlay { align-items: flex-end; }
+      .modal { border-radius: 20px 20px 0 0; }
+      /* Better horizontal scroll hint */
+      .table-wrap { scrollbar-width: thin; }
+      .table-wrap::-webkit-scrollbar { height: 6px; }
+      .table-wrap::-webkit-scrollbar-thumb { background: rgba(0,0,0,.2); border-radius: 3px; }
+      /* Page-header actions wrap to next line cleanly */
+      .page-header { align-items: flex-start; }
+      .page-header > .btn { margin-inline-start: auto; }
+      /* Sidebar wider drawer on bigger phones for readability */
+      .sidebar { width: min(280px, 82vw); }
+      /* Cards never overflow their parent */
+      .card, .settings-section, .quick-note-form { max-width: 100%; overflow-wrap: anywhere; }
+      /* Detail modal images shrink */
+      .detail-gallery img { width: 72px; height: 72px; }
+    }
+    /* Small phones */
+    @media (max-width: 480px) {
+      .sidebar { width: min(260px, 85vw); }
+      .card-header { flex-wrap: wrap; gap: 6px; }
+      .card-header .btn { flex: 1; min-width: 0; justify-content: center; }
+      .modal-header { padding-right: 14px; }
+      .modal-body { padding-inline: 14px; }
+      .detail-gallery img { width: 64px; height: 64px; }
+      .search-bar { flex-direction: column; align-items: stretch; }
+      .search-input-wrap { width: 100% !important; }
+      .action-btns { gap: 3px; }
+      .action-btns .btn { padding: 4px 6px; }
+    }
+    /* Extra-small phones */
+    @media (max-width: 360px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .btn { padding: 6px 10px; font-size: 11.5px; }
+      .modal-footer { flex-direction: column-reverse; }
+      .modal-footer .btn { width: 100%; }
+      .detail-gallery img { width: 56px; height: 56px; }
+    }
+    /* Touch device precision — bigger tap targets everywhere */
+    @media (hover: none) and (pointer: coarse) {
+      .btn { min-height: 38px; }
+      .nav-item { min-height: 40px; }
+      .pill { min-height: 30px; display: inline-flex; align-items: center; }
+      select, input[type="checkbox"], input[type="radio"] { transform-origin: center; }
+    }
+    /* Print-safety: never break the layout in print preview on any device */
+    @media print {
+      .sidebar, .mobile-menu-btn, .sidebar-backdrop, .topbar-actions { display: none !important; }
+      .main { margin: 0 !important; }
+    }
   </style>
   <!-- ══════════ CLOUD SYNC (Lovable Cloud) ══════════ -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -1970,32 +2060,62 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlYWhyZ2V0amltcm5qYnRyZ2twIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzc3OTMsImV4cCI6MjA5ODkxMzc5M30.RyspH51ZsmNmsoLI6KaiJWjz_8m58oa_rOenWzf5Mgs";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage, storageKey: 'crm_sb_session' } });
     const CRM_KEYS = ['crm_apartments','crm_code_counters','crm_clients','crm_owners','crm_notes','crm_finapts','crm_attendance','crm_employees'];
+    window.VIEWER_MODE = false;
+    window.VIEWER_OWNER_ID = null;
+    window.VIEWER_PERMS = null;
+    window.EDITOR_MODE = false;
+    window.EDITOR_OWNER_ID = null;
     window.CloudSync = {
       async pullToLocal() {
         const { data: u } = await sb.auth.getUser(); if (!u?.user) return false;
-        const { data, error } = await sb.from('crm_cloud_data').select('data').eq('user_id', u.user.id).maybeSingle();
+        // Check if this user is a team member for some owner
+        let ownerId = u.user.id;
+        window.VIEWER_MODE = false; window.VIEWER_OWNER_ID = null; window.VIEWER_PERMS = null;
+        window.EDITOR_MODE = false; window.EDITOR_OWNER_ID = null;
+        try {
+          const email = (u.user.email || '').toLowerCase();
+          const { data: inv } = await sb.from('team_viewers').select('owner_id,permissions,role').ilike('viewer_email', email).limit(1).maybeSingle();
+          if (inv && inv.owner_id && inv.owner_id !== u.user.id) {
+            ownerId = inv.owner_id;
+            if (inv.role === 'editor') {
+              window.EDITOR_MODE = true;
+              window.EDITOR_OWNER_ID = inv.owner_id;
+            } else {
+              window.VIEWER_MODE = true;
+              window.VIEWER_OWNER_ID = inv.owner_id;
+              window.VIEWER_PERMS = inv.permissions || {};
+            }
+          }
+        } catch(e) { console.warn('team check failed', e); }
+
+
+        const { data, error } = await sb.from('crm_cloud_data').select('data').eq('user_id', ownerId).maybeSingle();
         if (error) { console.warn('cloud pull error', error); return false; }
         if (data && data.data) {
           CRM_KEYS.forEach(k => { if (data.data[k] !== undefined) localStorage.setItem(k, JSON.stringify(data.data[k])); });
-        } else {
+        } else if (!window.VIEWER_MODE && !window.EDITOR_MODE) {
           // First login: seed cloud from whatever is local (may be empty).
           await window.CloudSync.pushFromLocal();
         }
         return true;
       },
       async pushFromLocal() {
+        if (window.VIEWER_MODE) return; // viewers are read-only
         const { data: u } = await sb.auth.getUser(); if (!u?.user) return;
+        const targetId = window.EDITOR_MODE ? window.EDITOR_OWNER_ID : u.user.id;
         const payload = {};
         CRM_KEYS.forEach(k => { try { payload[k] = JSON.parse(localStorage.getItem(k) || 'null'); } catch(e){ payload[k] = null; } });
-        const { error } = await sb.from('crm_cloud_data').upsert({ user_id: u.user.id, data: payload });
+        const { error } = await sb.from('crm_cloud_data').upsert({ user_id: targetId, data: payload });
         if (error) console.warn('cloud push error', error);
       },
       _t: null,
       schedulePush() {
+        if (window.VIEWER_MODE) return;
         clearTimeout(window.CloudSync._t);
         window.CloudSync._t = setTimeout(() => window.CloudSync.pushFromLocal(), 800);
       }
     };
+
   </script>
 </head>
 
@@ -5929,6 +6049,308 @@
     }
   </script>
 
+<style>
+  /* ═══ VIEWER MODE (Team read-only) — base rules; per-viewer column hiding is injected dynamically ═══ */
+  body.viewer-mode #page-apartments .page-header .btn-primary,
+  body.viewer-mode #page-apartments button[onclick*="showExportOptions"],
+  body.viewer-mode #page-apartments button[onclick*="openAptModal"],
+  body.viewer-mode #apts-table .action-btns,
+  body.viewer-mode #apt-select-all,
+  body.viewer-mode #apts-table .apt-select,
+  body.viewer-mode #page-apartments table th:nth-child(1),
+  body.viewer-mode #page-apartments table td:nth-child(1),
+  body.viewer-mode #page-apartments table th:nth-child(21),
+  body.viewer-mode #page-apartments table td:nth-child(21) { display: none !important; }
+  body.viewer-mode #apts-table span[onclick*="toggleAptPosted"] { pointer-events: none; opacity: .85; }
+  body.viewer-mode .nav-item[data-viewer-hide="1"],
+  body.viewer-mode .nav-label[data-viewer-hide="1"] { display: none !important; }
+  body.viewer-mode .sidebar-user-role::after { content: " (عرض فقط)"; color: #f59e0b; }
+  .viewer-badge { display:inline-block;background:#f59e0b;color:#fff;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;margin-right:8px }
+  #team-viewers-section { margin-top: 20px }
+  #team-viewers-list { display:flex;flex-direction:column;gap:8px;margin-top:12px }
+  .tv-row { display:flex;align-items:center;justify-content:space-between;background:var(--gray-100,#f3f4f6);padding:10px 14px;border-radius:8px;font-size:14px;flex-wrap:wrap;gap:8px }
+  .tv-row .tv-email { font-weight:600 }
+  .tv-row .tv-actions { display:flex;gap:6px;flex-wrap:wrap }
+  /* Perms modal */
+  .perms-modal-bg { position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px }
+  .perms-modal { background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:90vh;overflow:auto;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35) }
+  .perms-modal h3 { margin:0 0 4px;font-size:18px }
+  .perms-modal .perms-sub { font-size:13px;color:#6b7280;margin-bottom:14px }
+  .perms-group { border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px;margin-bottom:12px }
+  .perms-group h4 { margin:0 0 10px;font-size:14px;color:#111827 }
+  .perms-grid { display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px }
+  .perms-grid label { display:flex;align-items:center;gap:6px;font-size:13px;background:#f9fafb;padding:6px 10px;border-radius:6px;cursor:pointer }
+  .perms-grid label:hover { background:#f3f4f6 }
+  .perms-grid input { accent-color:#2563eb }
+  .perms-actions { display:flex;justify-content:flex-end;gap:8px;margin-top:14px }
+  .perms-toolbar { display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap }
+  .perms-toolbar button { font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid #d1d5db;background:#fff;cursor:pointer }
+</style>
+<script>
+  (function(){
+    // ═══ Permission schema ═══
+    // Pages available in the sidebar nav (key = arabic label match, label = display)
+    const ALL_PAGES = [
+      { key: 'dashboard',  label: 'الرئيسية',   match: /الرئيسية|لوحة|Dashboard/i },
+      { key: 'apartments', label: 'الشقق',      match: /الشقق/ },
+      { key: 'clients',    label: 'العملاء',    match: /العملاء/ },
+      { key: 'owners',     label: 'الملاك',     match: /الملاك/ },
+      { key: 'notes',      label: 'الملاحظات',  match: /الملاحظات/ },
+      { key: 'finapts',    label: 'الحسابات',   match: /الحسابات|المالية/ },
+      { key: 'attendance', label: 'الحضور',     match: /الحضور|الانصراف/ },
+      { key: 'employees',  label: 'الموظفين',   match: /الموظفين|الموظفون/ },
+      { key: 'reports',    label: 'التقارير',   match: /التقارير/ },
+      { key: 'settings',   label: 'الإعدادات',  match: /الإعدادات|الاعدادات/ }
+    ];
+    // Apartments table columns — nth-child index in #apts-table (1-based, matches table order)
+    // 1=checkbox (always hidden), 21=actions (always hidden)
+    const APT_COLS = [
+      { key:'code',        label:'🔖 الكود',       idx:2  },
+      { key:'owner',       label:'اسم المالك',     idx:3  },
+      { key:'owner_phone', label:'رقم المالك',     idx:4  },
+      { key:'building',    label:'رقم العمارة',    idx:5  },
+      { key:'area',        label:'المنطقة',        idx:6  },
+      { key:'price',       label:'السعر',          idx:7  },
+      { key:'commission',  label:'العمولة',        idx:8  },
+      { key:'floor',       label:'🏗️ الدور',        idx:9  },
+      { key:'space',       label:'📐 المساحة',      idx:10 },
+      { key:'rooms',       label:'🛏️ الغرف',        idx:11 },
+      { key:'bathrooms',   label:'🚿 الحمامات',     idx:12 },
+      { key:'propType',    label:'🏠 نوع العقار',   idx:13 },
+      { key:'finishing',   label:'🔨 التشطيب',      idx:14 },
+      { key:'facade',      label:'🪟 الواجهة',      idx:15 },
+      { key:'amenities',   label:'⚡ المرافق',      idx:16 },
+      { key:'notes',       label:'📝 ملاحظات',      idx:17 },
+      { key:'images',      label:'📷 الصور',        idx:18 },
+      { key:'status',      label:'الحالة',          idx:19 },
+      { key:'client',      label:'العميل',          idx:20 }
+    ];
+    // Default permissions if the owner didn't customize (matches the original hard-coded behavior)
+    const DEFAULT_PERMS = {
+      pages: ['apartments'],
+      apt_cols: { code:true, owner:false, owner_phone:false, building:false, area:true, price:true, commission:false, floor:true, space:true, rooms:true, bathrooms:true, propType:true, finishing:true, facade:true, amenities:true, notes:true, images:true, status:true, client:true }
+    };
+    window.__ALL_PAGES = ALL_PAGES;
+    window.__APT_COLS = APT_COLS;
+    window.__DEFAULT_PERMS = DEFAULT_PERMS;
+
+    function normalizePerms(p) {
+      p = p && typeof p === 'object' ? p : {};
+      const pages = Array.isArray(p.pages) && p.pages.length ? p.pages : DEFAULT_PERMS.pages.slice();
+      const cols  = (p.apt_cols && typeof p.apt_cols === 'object') ? p.apt_cols : {};
+      const merged = {};
+      APT_COLS.forEach(c => { merged[c.key] = (c.key in cols) ? !!cols[c.key] : DEFAULT_PERMS.apt_cols[c.key]; });
+      return { pages, apt_cols: merged };
+    }
+
+    function applyViewerMode() {
+      if (!window.VIEWER_MODE) return;
+      const perms = normalizePerms(window.VIEWER_PERMS);
+      document.body.classList.add('viewer-mode');
+      const allowed = new Set(perms.pages);
+      // Hide nav items whose label doesn't match an allowed page
+      document.querySelectorAll('.nav-item').forEach(el => {
+        const t = (el.textContent || '').trim();
+        const match = ALL_PAGES.find(p => p.match.test(t));
+        if (!match || !allowed.has(match.key)) el.setAttribute('data-viewer-hide','1');
+        else el.removeAttribute('data-viewer-hide');
+      });
+      document.querySelectorAll('.nav-label').forEach(el => el.setAttribute('data-viewer-hide','1'));
+      // Inject dynamic column-hiding CSS for apartments
+      const hideIdx = APT_COLS.filter(c => !perms.apt_cols[c.key]).map(c => c.idx);
+      let sel = '';
+      if (hideIdx.length) {
+        sel = hideIdx.map(i => `body.viewer-mode #page-apartments table th:nth-child(${i}),body.viewer-mode #page-apartments table td:nth-child(${i})`).join(',') + '{display:none !important}';
+      }
+      let styleEl = document.getElementById('viewer-dyn-style');
+      if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'viewer-dyn-style'; document.head.appendChild(styleEl); }
+      styleEl.textContent = sel;
+      // Navigate to first allowed page
+      try {
+        const first = perms.pages[0] || 'apartments';
+        if (typeof showPage === 'function') showPage(first);
+      } catch(e){}
+      // Badge in topbar
+      const topbar = document.querySelector('.topbar');
+      if (topbar && !document.getElementById('viewer-badge')) {
+        const b = document.createElement('span');
+        b.id = 'viewer-badge'; b.className = 'viewer-badge';
+        b.textContent = '👁️ وضع العرض فقط';
+        topbar.appendChild(b);
+      }
+    }
+    window.applyViewerMode = applyViewerMode;
+
+    async function loadTeamViewers() {
+      const listEl = document.getElementById('team-viewers-list');
+      if (!listEl) return;
+      const { data: u } = await sb.auth.getUser(); if (!u?.user) return;
+      const { data, error } = await sb.from('team_viewers').select('id,viewer_email,permissions,role,created_at').eq('owner_id', u.user.id).order('created_at',{ascending:false});
+      if (error) { listEl.innerHTML = '<div style="color:#b91c1c">تعذّر التحميل</div>'; return; }
+      if (!data || !data.length) { listEl.innerHTML = '<div style="color:var(--gray-500);font-size:13px">لا يوجد أعضاء بعد</div>'; return; }
+      window.__TV_CACHE = {};
+      listEl.innerHTML = data.map(r => {
+        window.__TV_CACHE[r.id] = r;
+        const p = normalizePerms(r.permissions);
+        const isEditor = r.role === 'editor';
+        const summary = isEditor
+          ? '👑 مشرف — صلاحيات كاملة (يعدل ويمسح زي المالك)'
+          : `👁️ عرض فقط · ${p.pages.length} قسم · ${Object.values(p.apt_cols).filter(Boolean).length}/${APT_COLS.length} عمود`;
+        return `<div class="tv-row">
+          <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+            <span class="tv-email">${r.viewer_email}</span>
+            <span style="font-size:11px;color:#6b7280">${summary}</span>
+          </div>
+          <div class="tv-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <select onchange="changeTeamRole('${r.id}', this.value)" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+              <option value="viewer" ${!isEditor?'selected':''}>👁️ عرض فقط</option>
+              <option value="editor" ${isEditor?'selected':''}>👑 مشرف (تعديل)</option>
+            </select>
+            ${isEditor ? '' : `<button class="btn btn-secondary btn-sm" onclick="openPermsModal('${r.id}')">⚙️ الصلاحيات</button>`}
+            <button class="btn btn-danger btn-sm" onclick="removeTeamViewer('${r.id}')">🗑️ إزالة</button>
+          </div>
+        </div>`;
+      }).join('');
+
+    }
+    window.loadTeamViewers = loadTeamViewers;
+
+    window.addTeamViewer = async function() {
+      const inp = document.getElementById('tv-email-input');
+      const email = (inp.value || '').trim().toLowerCase();
+      if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { alert('من فضلك أدخل إيميل صحيح'); return; }
+      const { data: u } = await sb.auth.getUser(); if (!u?.user) return;
+      const { error } = await sb.from('team_viewers').insert({ owner_id: u.user.id, viewer_email: email, permissions: DEFAULT_PERMS });
+      if (error) { alert('خطأ: ' + error.message); return; }
+      inp.value = '';
+      loadTeamViewers();
+      if (typeof toast === 'function') toast('✅ تمت الإضافة');
+    };
+
+    window.removeTeamViewer = async function(id) {
+      if (!confirm('إزالة هذا العضو؟')) return;
+      const { error } = await sb.from('team_viewers').delete().eq('id', id);
+      if (error) { alert('خطأ: ' + error.message); return; }
+      loadTeamViewers();
+    };
+
+    window.changeTeamRole = async function(id, role) {
+      if (!['viewer','editor'].includes(role)) return;
+      if (role === 'editor' && !confirm('تحويل هذا العضو إلى مشرف بصلاحيات كاملة (يقدر يعدل ويمسح بياناتك زيك تماماً). متأكد؟')) {
+        loadTeamViewers(); return;
+      }
+      const { error } = await sb.from('team_viewers').update({ role }).eq('id', id);
+      if (error) { alert('خطأ: ' + error.message); loadTeamViewers(); return; }
+      loadTeamViewers();
+      if (typeof toast === 'function') toast('✅ تم تحديث الدور');
+    };
+
+
+    window.openPermsModal = function(id) {
+      const rec = (window.__TV_CACHE || {})[id];
+      if (!rec) return;
+      const perms = normalizePerms(rec.permissions);
+      const pageSet = new Set(perms.pages);
+      const bg = document.createElement('div');
+      bg.className = 'perms-modal-bg';
+      bg.innerHTML = `
+        <div class="perms-modal" onclick="event.stopPropagation()">
+          <h3>⚙️ صلاحيات: ${rec.viewer_email}</h3>
+          <div class="perms-sub">حدد الأقسام والأعمدة اللي هيقدر يشوفها هذا العضو.</div>
+
+          <div class="perms-group">
+            <h4>📂 الأقسام (Tabs)</h4>
+            <div class="perms-toolbar">
+              <button type="button" onclick="__permsToggleAll('pg',true)">✔️ تحديد الكل</button>
+              <button type="button" onclick="__permsToggleAll('pg',false)">✖️ إلغاء الكل</button>
+            </div>
+            <div class="perms-grid">
+              ${ALL_PAGES.map(p => `<label><input type="checkbox" data-pg="${p.key}" ${pageSet.has(p.key)?'checked':''}> ${p.label}</label>`).join('')}
+            </div>
+          </div>
+
+          <div class="perms-group">
+            <h4>📊 أعمدة جدول الشقق</h4>
+            <div class="perms-toolbar">
+              <button type="button" onclick="__permsToggleAll('col',true)">✔️ تحديد الكل</button>
+              <button type="button" onclick="__permsToggleAll('col',false)">✖️ إلغاء الكل</button>
+            </div>
+            <div class="perms-grid">
+              ${APT_COLS.map(c => `<label><input type="checkbox" data-col="${c.key}" ${perms.apt_cols[c.key]?'checked':''}> ${c.label}</label>`).join('')}
+            </div>
+          </div>
+
+          <div class="perms-actions">
+            <button class="btn btn-secondary" onclick="__permsClose()">إلغاء</button>
+            <button class="btn btn-primary" onclick="__permsSave('${id}')">💾 حفظ</button>
+          </div>
+        </div>
+      `;
+      bg.addEventListener('click', (e) => { if (e.target === bg) __permsClose(); });
+      document.body.appendChild(bg);
+      window.__permsBg = bg;
+    };
+    window.__permsClose = function(){ if (window.__permsBg) { window.__permsBg.remove(); window.__permsBg = null; } };
+    window.__permsToggleAll = function(kind, val){
+      const sel = kind === 'pg' ? '[data-pg]' : '[data-col]';
+      window.__permsBg.querySelectorAll(sel).forEach(cb => cb.checked = val);
+    };
+    window.__permsSave = async function(id) {
+      const pages = Array.from(window.__permsBg.querySelectorAll('[data-pg]:checked')).map(cb => cb.dataset.pg);
+      const apt_cols = {};
+      window.__APT_COLS.forEach(c => {
+        const cb = window.__permsBg.querySelector(`[data-col="${c.key}"]`);
+        apt_cols[c.key] = !!(cb && cb.checked);
+      });
+      if (!pages.length) { alert('لازم تختار قسم واحد على الأقل'); return; }
+      const { error } = await sb.from('team_viewers').update({ permissions: { pages, apt_cols } }).eq('id', id);
+      if (error) { alert('خطأ: ' + error.message); return; }
+      __permsClose();
+      loadTeamViewers();
+      if (typeof toast === 'function') toast('✅ تم حفظ الصلاحيات');
+    };
+
+    function injectTeamSection() {
+      if (window.VIEWER_MODE) return; // owners only
+      const settingsPage = document.getElementById('page-settings');
+      if (!settingsPage || document.getElementById('team-viewers-section')) return;
+      const sec = document.createElement('div');
+      sec.className = 'settings-section';
+      sec.id = 'team-viewers-section';
+      sec.innerHTML = `
+        <h3>👥 فريق العرض (Team Viewers)</h3>
+        <p style="font-size:13px;color:var(--gray-500);margin-bottom:12px">
+          أضف إيميلات أعضاء الفريق. لكل عضو تختار دوره: <b>👁️ عرض فقط</b> (يشوف بس ومش يعدل، وتحدد له الأقسام والأعمدة من زرار <b>⚙️ الصلاحيات</b>) أو <b>👑 مشرف</b> (بيعمل كل حاجه انت بتعملها — يضيف ويعدل ويمسح على نفس بياناتك).
+
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="email" id="tv-email-input" placeholder="example@mail.com" style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--gray-300,#d1d5db);border-radius:8px">
+          <button class="btn btn-primary" onclick="addTeamViewer()">+ إضافة عضو</button>
+        </div>
+        <div id="team-viewers-list"></div>
+        <p style="margin-top:10px;font-size:12px;color:var(--gray-500)">
+          العضو لازم يعمل حساب بنفس الإيميل ده من شاشة الدخول عشان يقدر يشوف بياناتك.
+        </p>
+      `;
+      settingsPage.appendChild(sec);
+      loadTeamViewers();
+    }
+
+    // Poll for readiness (viewer flag set inside pullToLocal → after login)
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      if (document.getElementById('app-shell') && document.getElementById('app-shell').style.display !== 'none') {
+        applyViewerMode();
+        injectTeamSection();
+        try { if (typeof renderApartments === 'function') renderApartments(); } catch(e){}
+        clearInterval(iv);
+      }
+      if (tries > 40) clearInterval(iv);
+    }, 300);
+  })();
+</script>
 </body>
 
 </html>
+
