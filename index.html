@@ -2059,7 +2059,7 @@
     const SUPABASE_URL = "https://geahrgetjimrnjbtrgkp.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlYWhyZ2V0amltcm5qYnRyZ2twIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzc3OTMsImV4cCI6MjA5ODkxMzc5M30.RyspH51ZsmNmsoLI6KaiJWjz_8m58oa_rOenWzf5Mgs";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage, storageKey: 'crm_sb_session' } });
-    const CRM_KEYS = ['crm_apartments','crm_code_counters','crm_clients','crm_owners','crm_notes','crm_finapts','crm_attendance','crm_employees','crm_activity_log'];
+    const CRM_KEYS = ['crm_apartments','crm_code_counters','crm_clients','crm_owners','crm_notes','crm_finapts','crm_attendance','crm_employees'];
     window.VIEWER_MODE = false;
     window.VIEWER_OWNER_ID = null;
     window.VIEWER_PERMS = null;
@@ -2380,7 +2380,7 @@
             <div>
               <div class="page-title">🏢 الشقق</div>
               <div class="page-sub">إدارة جميع الوحدات السكنية — اسم المالك، المنطقة، السعر، العمولة والحالة</div>
-            </div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-ghost" onclick="openActivityLog()">📋 سجل النشاط</button><button class="btn btn-primary" onclick="openAptModal()">+ إضافة شقة</button></div>
+            </div><button class="btn btn-primary" onclick="openAptModal()">+ إضافة شقة</button>
           </div>
           <div class="export-bar"><span>📤 تصدير:</span><button class="btn btn-green btn-sm"
               onclick="showExportOptions('aparts','excel')">📊 Excel</button><button class="btn btn-danger btn-sm"
@@ -2412,11 +2412,6 @@
             <div class="pill active" onclick="setAptPostFilter('all',this)">🗂️ كل حالات النشر <span id="apt-cnt-all" style="background:rgba(0,0,0,.08);padding:1px 7px;border-radius:10px;margin-right:4px;font-size:11px">0</span></div>
             <div class="pill" onclick="setAptPostFilter('posted',this)" style="--pill-active:var(--green)">📢 منشورة <span id="apt-cnt-posted" style="background:rgba(34,197,94,.15);color:#15803d;padding:1px 7px;border-radius:10px;margin-right:4px;font-size:11px;font-weight:700">0</span></div>
             <div class="pill" onclick="setAptPostFilter('unposted',this)" style="--pill-active:#b91c1c">⛔ لم تُنشر بعد <span id="apt-cnt-unposted" style="background:rgba(185,28,28,.12);color:#b91c1c;padding:1px 7px;border-radius:10px;margin-right:4px;font-size:11px;font-weight:700">0</span></div>
-          </div>
-          <div class="pill-filters" id="apt-deal-filters" style="margin-top:-6px">
-            <div class="pill active" onclick="setAptDealFilter('all',this)">🗂️ كل أنواع التعامل</div>
-            <div class="pill" onclick="setAptDealFilter('إيجار',this)">🏠 شقق إيجار</div>
-            <div class="pill" onclick="setAptDealFilter('قسط',this)">💳 شقق قسط</div>
           </div>
           <div class="pill-filters" id="apt-feature-filters" style="margin-top:-4px;align-items:center">
             <span style="font-size:12.5px;color:#475569;font-weight:700;margin-left:4px">✨ فلتر المميزات:</span>
@@ -3762,11 +3757,6 @@
               <option value="بيع">🏷️ بيع</option>
               <option value="إيجار">🔑 إيجار</option>
             </select></div>
-          <div class="form-group"><label>نوع التعامل</label><select id="apt-deal-type">
-              <option value="">— غير محدد —</option>
-              <option value="إيجار">🏠 إيجار</option>
-              <option value="قسط">💳 قسط</option>
-            </select></div>
           <div class="form-group full"><label>✨ مميزات الشقة (اختر ما ينطبق)</label>
             <div id="apt-features-box" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#fafbfc"></div>
           </div>
@@ -3785,21 +3775,6 @@
       </div>
       <div class="modal-footer"><button class="btn btn-ghost" onclick="closeModal('apt-modal')">إلغاء</button><button
           class="btn btn-primary" onclick="saveApartment()">💾 حفظ</button></div>
-    </div>
-  </div>
-
-  <!-- ══════════ ACTIVITY LOG MODAL ══════════ -->
-  <div class="modal-overlay" id="activity-log-modal">
-    <div class="modal" style="max-width:560px">
-      <div class="modal-header">
-        <div class="modal-title">📋 سجل نشاط الشقق</div><button class="modal-close"
-          onclick="closeModal('activity-log-modal')">✕</button>
-      </div>
-      <div class="modal-body">
-        <div id="activity-log-list" style="max-height:60vh;overflow:auto"></div>
-      </div>
-      <div class="modal-footer"><button class="btn btn-danger btn-sm" onclick="clearActivityLog()">🗑️ مسح السجل</button><button
-          class="btn btn-ghost" onclick="closeModal('activity-log-modal')">إغلاق</button></div>
     </div>
   </div>
 
@@ -4011,7 +3986,6 @@
           finApts = JSON.parse(localStorage.getItem('crm_finapts') || '[]');
           attendance = JSON.parse(localStorage.getItem('crm_attendance') || '[]');
           employees = JSON.parse(localStorage.getItem('crm_employees') || '[]');
-          activityLog = JSON.parse(localStorage.getItem('crm_activity_log') || '[]');
         } catch(e) {}
         document.getElementById('setup-screen').style.display = 'none';
         document.getElementById('login-screen').classList.remove('show');
@@ -4127,11 +4101,10 @@
     let finApts = JSON.parse(localStorage.getItem('crm_finapts') || '[]');
     let attendance = JSON.parse(localStorage.getItem('crm_attendance') || '[]');
     let employees = JSON.parse(localStorage.getItem('crm_employees') || '[]');
-    let activityLog = JSON.parse(localStorage.getItem('crm_activity_log') || '[]');
     let currentFinAptId = null;
     let lastDeleted = null;
     let editingAptId = null, editingClientId = null, editingOwnerId = null;
-    let aptFilter = 'all', clientFilter = 'all', aptPostFilter = 'all', aptDealFilter = 'all';
+    let aptFilter = 'all', clientFilter = 'all', aptPostFilter = 'all';
     const APT_FEATURES = [
       { key: 'electricity', label: 'عداد كهرباء', icon: '⚡' },
       { key: 'water', label: 'عداد مياه', icon: '🚰' },
@@ -4177,7 +4150,6 @@
       localStorage.setItem('crm_finapts', JSON.stringify(finApts));
       localStorage.setItem('crm_attendance', JSON.stringify(attendance));
       localStorage.setItem('crm_employees', JSON.stringify(employees));
-      localStorage.setItem('crm_activity_log', JSON.stringify(activityLog));
       try { window.CloudSync && window.CloudSync.schedulePush(); } catch(e){}
     };
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -4379,45 +4351,6 @@
     // ══════════════════════════════════════
     function setAptFilter(f, el) { aptFilter = f; document.querySelectorAll('#apt-filters .pill').forEach(p => p.classList.remove('active')); el.classList.add('active'); renderApartments() }
     function setAptPostFilter(f, el) { aptPostFilter = f; document.querySelectorAll('#apt-post-filters .pill').forEach(p => p.classList.remove('active')); el.classList.add('active'); renderApartments() }
-    function setAptDealFilter(f, el) { aptDealFilter = f; document.querySelectorAll('#apt-deal-filters .pill').forEach(p => p.classList.remove('active')); el.classList.add('active'); renderApartments() }
-
-    // ══════════ Activity Log (apartments) ══════════
-    function logActivity(action, apt) {
-      const who = window.CURRENT_EMAIL || 'المالك';
-      activityLog = [{
-        id: uid(),
-        action, // 'add' | 'edit' | 'delete'
-        aptId: apt?.id || '',
-        aptCode: apt?.code || '—',
-        aptLabel: [apt?.building, apt?.area].filter(Boolean).join(' - ') || '—',
-        who,
-        when: Date.now()
-      }, ...activityLog].slice(0, 500);
-      save();
-    }
-    function renderActivityLog() {
-      const wrap = document.getElementById('activity-log-list');
-      if (!wrap) return;
-      if (!activityLog.length) { wrap.innerHTML = '<div style="padding:30px;text-align:center;color:var(--gray-400)">لا يوجد نشاط مسجل بعد</div>'; return; }
-      const actionMeta = { add: { icon: '➕', label: 'أضاف', color: '#16a34a' }, edit: { icon: '✏️', label: 'عدّل', color: '#d97706' }, delete: { icon: '🗑️', label: 'حذف', color: '#dc2626' } };
-      wrap.innerHTML = activityLog.map(l => {
-        const m = actionMeta[l.action] || { icon: '•', label: l.action, color: '#64748b' };
-        const dt = new Date(l.when).toLocaleString('ar-EG');
-        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--gray-100)">
-          <span style="width:30px;height:30px;border-radius:50%;background:${m.color}22;color:${m.color};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${m.icon}</span>
-          <div style="flex:1;min-width:0">
-            <div style="font-size:13px;font-weight:700;color:var(--gray-800)"><span style="color:${m.color}">${l.who}</span> ${m.label} الشقة <span style="color:var(--blue)">${l.aptCode}</span> ${l.aptLabel && l.aptLabel !== '—' ? '(' + l.aptLabel + ')' : ''}</div>
-            <div style="font-size:11px;color:var(--gray-400);margin-top:2px">${dt}</div>
-          </div>
-        </div>`;
-      }).join('');
-    }
-    function openActivityLog() { renderActivityLog(); document.getElementById('activity-log-modal').classList.add('open'); }
-    function clearActivityLog() {
-      if (window.VIEWER_MODE) { toast('غير مسموح', '🚫'); return; }
-      if (!confirm('مسح سجل النشاط بالكامل؟')) return;
-      activityLog = []; save(); renderActivityLog(); toast('تم مسح السجل', '🗑️');
-    }
     function renderApartments() {
       const q = document.getElementById('apt-search').value.toLowerCase();
       const fieldEl = document.getElementById('apt-num-field');
@@ -4450,8 +4383,7 @@
           const af = new Set(a.features || []);
           fm = false; for (const k of aptFeatureFilter) { if (af.has(k)) { fm = true; break; } }
         }
-        const dm = aptDealFilter === 'all' || a.dealType === aptDealFilter;
-        return m && sm && fm && dm && (aptFilter === 'all' || a.status === aptFilter);
+        return m && sm && fm && (aptFilter === 'all' || a.status === aptFilter);
       });
       // counts update against the current search context
       const cAll = baseList.length;
@@ -4484,7 +4416,6 @@
           ? (a.postedAt ? 'منشورة منذ: ' + new Date(a.postedAt).toLocaleString('ar-EG') + '\nاضغط لإلغاء النشر' : 'منشورة — اضغط لإلغاء النشر')
           : 'لم تُنشر بعد — اضغط للتعليم كمنشورة';
         const postChip = `<span onclick="event.stopPropagation();toggleAptPosted('${a.id}')" title="${postedTitle}" style="cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:3px;background:${posted ? 'rgba(34,197,94,.15)' : 'rgba(185,28,28,.10)'};color:${posted ? '#15803d' : '#b91c1c'};padding:2px 7px;border-radius:999px;font-size:10.5px;font-weight:700;margin-top:4px;border:1px solid ${posted ? 'rgba(34,197,94,.35)' : 'rgba(185,28,28,.3)'}">${posted ? '📢 منشورة' : '⛔ نشر'}</span>`;
-        const dealChip = a.dealType ? `<span style="display:inline-flex;align-items:center;gap:3px;background:${a.dealType === 'قسط' ? 'rgba(124,58,237,.12)' : 'rgba(15,42,74,.10)'};color:${a.dealType === 'قسط' ? '#6d28d9' : '#0f2a4a'};padding:2px 7px;border-radius:999px;font-size:10.5px;font-weight:700;margin-top:4px;border:1px solid ${a.dealType === 'قسط' ? 'rgba(124,58,237,.3)' : 'rgba(15,42,74,.2)'}">${a.dealType === 'قسط' ? '💳 قسط' : '🏠 إيجار'}</span>` : '';
         const stripe = posted ? 'border-right:4px solid var(--green)' : 'border-right:4px solid #ef4444';
         const featMap = Object.fromEntries(APT_FEATURES.map(f => [f.key, f]));
         const featChips = (a.features && a.features.length)
@@ -4498,7 +4429,7 @@
         const editDelBtns = showActions
           ? `<button class="btn btn-ghost btn-sm" onclick="editApartment('${a.id}')">✏️</button>${showDetailBtn}<button class="btn btn-danger btn-sm" onclick="deleteApartment('${a.id}')">🗑️</button>`
           : showDetailBtn;
-        return `<tr data-apt-row="${a.id}" style="${stripe}"><td><input type="checkbox" class="apt-select" value="${a.id}" onclick="event.stopPropagation()"></td><td><div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px"><strong style="color:var(--blue-dark);background:var(--blue-pale);padding:4px 8px;border-radius:6px;letter-spacing:.5px">${a.code || '—'}</strong>${postChip}${dealChip}</div></td><td><strong>${oname}</strong></td><td dir="ltr" style="text-align:right">${ophone}</td><td>${a.building}</td><td>${a.area}</td><td style="font-weight:700;color:var(--blue)">${fmt(a.price)} ج.م</td><td style="color:var(--green);font-weight:700">${fmt(a.commission)} ج.م</td><td>${a.floor || '—'}</td><td>${a.space || '—'}</td><td>${a.rooms || '—'}</td><td>${a.bathrooms || '—'}</td><td>${a.propertyType || '—'}</td><td>${a.finishing || '—'}</td><td>${a.facade || '—'}</td><td style="max-width:220px;white-space:normal">${amenCell}</td><td style="max-width:200px;white-space:normal">${a.notes || '—'}</td><td>${imgs}</td><td>${aptStatusBadge(a.status)}</td><td style="font-size:12.5px">${clientsForApt(a.id)}</td><td><div class="action-btns">${editDelBtns}</div></td></tr>`;
+        return `<tr data-apt-row="${a.id}" style="${stripe}"><td><input type="checkbox" class="apt-select" value="${a.id}" onclick="event.stopPropagation()"></td><td><div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px"><strong style="color:var(--blue-dark);background:var(--blue-pale);padding:4px 8px;border-radius:6px;letter-spacing:.5px">${a.code || '—'}</strong>${postChip}</div></td><td><strong>${oname}</strong></td><td dir="ltr" style="text-align:right">${ophone}</td><td>${a.building}</td><td>${a.area}</td><td style="font-weight:700;color:var(--blue)">${fmt(a.price)} ج.م</td><td style="color:var(--green);font-weight:700">${fmt(a.commission)} ج.م</td><td>${a.floor || '—'}</td><td>${a.space || '—'}</td><td>${a.rooms || '—'}</td><td>${a.bathrooms || '—'}</td><td>${a.propertyType || '—'}</td><td>${a.finishing || '—'}</td><td>${a.facade || '—'}</td><td style="max-width:220px;white-space:normal">${amenCell}</td><td style="max-width:200px;white-space:normal">${a.notes || '—'}</td><td>${imgs}</td><td>${aptStatusBadge(a.status)}</td><td style="font-size:12.5px">${clientsForApt(a.id)}</td><td><div class="action-btns">${editDelBtns}</div></td></tr>`;
       }).join('');
     }
     function toggleSelectAllApts(cb) {
@@ -4530,7 +4461,6 @@
       renderAptFeatureCheckboxes(a?.features || []);
       document.getElementById('apt-status').value = a?.status || 'متاحة';
       document.getElementById('apt-offer-type').value = a?.offerType || 'بيع';
-      if (document.getElementById('apt-deal-type')) document.getElementById('apt-deal-type').value = a?.dealType || '';
       document.getElementById('apt-code').value = a?.code || '— سيُنشأ بعد الحفظ —';
       document.getElementById('apt-code-letter').value = a?.codeLetter || normalizeCodeLetter(a?.area) || '';
       document.getElementById('apt-code-letter').readOnly = !!a?.code;
@@ -4584,7 +4514,6 @@
         features: getSelectedAptFeatures(),
         status: document.getElementById('apt-status').value,
         offerType: document.getElementById('apt-offer-type').value || 'بيع',
-        dealType: document.getElementById('apt-deal-type') ? document.getElementById('apt-deal-type').value : (existingApt?.dealType || ''),
         clientId: document.getElementById('apt-client').value || '',
         notes: document.getElementById('apt-notes').value,
         images: storedImages[editingAptId || 'new'] || [],
@@ -4595,8 +4524,8 @@
         clients = clients.map(c => c.id === obj.clientId ? { ...c, apartmentId: obj.id } : c);
         save();
       }
-      if (editingAptId) { apartments = apartments.map(a => a.id === editingAptId ? obj : a); toast('تم تعديل الشقة ✏️'); logActivity('edit', obj); }
-      else { apartments.push(obj); toast('تمت إضافة الشقة 🏢'); logActivity('add', obj); }
+      if (editingAptId) { apartments = apartments.map(a => a.id === editingAptId ? obj : a); toast('تم تعديل الشقة ✏️') }
+      else { apartments.push(obj); toast('تمت إضافة الشقة 🏢') }
       save(); updateBadges(); closeModal('apt-modal'); renderApartments();
     }
     function deleteApartment(id) {
@@ -4607,9 +4536,7 @@
         }
       }
       if (!confirm('هل تريد حذف هذه الشقة؟')) return;
-      const delApt = apartments.find(a => a.id === id);
       apartments = apartments.filter(a => a.id !== id); save(); updateBadges(); renderApartments(); toast('تم حذف الشقة', '🗑️');
-      logActivity('delete', delApt);
     }
     function toggleAptPosted(id) {
       apartments = apartments.map(a => {
@@ -5340,8 +5267,6 @@
       const sf = document.getElementById('fin-status-filter')?.value || '';
       let list = finApts.filter(a => !q || (a.name || '').toLowerCase().includes(q) || (a.address || '').toLowerCase().includes(q) || (a.owner || '').toLowerCase().includes(q));
       if (sf) list = list.filter(a => (a.status || 'active') === sf);
-      const visIds = __financeVisibleIds();
-      if (visIds) list = list.filter(a => visIds.has(a.id));
       const wrap = document.getElementById('fin-apts-list');
       if (!list.length) {
         wrap.innerHTML = '<div class="fin-empty"><div class="icon">📭</div><div style="font-size:15px;font-weight:700;color:var(--gray-500);margin-bottom:5px">لا توجد شقق</div><div style="font-size:12.5px">اضغط "شقة جديدة" لبدء التسجيل</div></div>';
@@ -5365,7 +5290,8 @@
           ${a.address ? `<div class="fin-card-addr">📍 ${a.address}</div>` : ''}
         </div>
         <div class="fin-card-actions" onclick="event.stopPropagation()">
-          ${__financeCanEdit(a.id) ? `<button onclick="editFinApt('${a.id}')" title="تعديل">✏️</button><button onclick="deleteFinApt('${a.id}')" title="حذف">🗑️</button>` : ''}
+          <button onclick="editFinApt('${a.id}')" title="تعديل">✏️</button>
+          <button onclick="deleteFinApt('${a.id}')" title="حذف">🗑️</button>
         </div>
       </div>
       <div class="fin-owner">
@@ -5384,7 +5310,6 @@
     }
 
     function openFinAptModal() {
-      if (window.VIEWER_MODE) { toast('غير مسموح — لا يمكنك إضافة شقق حسابات جديدة', '🚫'); return; }
       editingFinAptId = null;
       document.getElementById('fin-apt-modal-title').textContent = 'إضافة شقة';
       ['fin-apt-name', 'fin-apt-address', 'fin-apt-owner', 'fin-apt-phone', 'fin-apt-budget', 'fin-apt-notes'].forEach(id => document.getElementById(id).value = '');
@@ -5392,7 +5317,6 @@
       document.getElementById('fin-apt-modal').classList.add('open');
     }
     function editFinApt(id) {
-      if (!__financeCanEdit(id)) { toast('غير مسموح — تقدر تشوف بس', '🚫'); return; }
       const a = finApts.find(x => x.id === id); if (!a) return;
       editingFinAptId = id;
       document.getElementById('fin-apt-modal-title').textContent = 'تعديل الشقة';
@@ -5406,8 +5330,6 @@
       document.getElementById('fin-apt-modal').classList.add('open');
     }
     function saveFinApt() {
-      if (editingFinAptId && !__financeCanEdit(editingFinAptId)) { toast('غير مسموح — تقدر تشوف بس', '🚫'); return; }
-      if (!editingFinAptId && window.VIEWER_MODE) { toast('غير مسموح', '🚫'); return; }
       const name = document.getElementById('fin-apt-name').value.trim();
       if (!name) { toast('أدخل اسم الشقة', '⚠️'); return; }
       const data = {
@@ -5425,7 +5347,6 @@
     }
 
     function deleteFinApt(id) {
-      if (!__financeCanEdit(id)) { toast('غير مسموح — تقدر تشوف بس', '🚫'); return; }
       if (!confirm('حذف الشقة وكل عملياتها؟')) return;
       const a = finApts.find(x => x.id === id);
       lastDeleted = { type: 'apt', data: JSON.parse(JSON.stringify(a)) };
@@ -5538,7 +5459,8 @@
     <td>${t.receipt ? `<img src="${t.receipt}" class="tx-thumb" onclick="viewReceipt('${t.id}')">` : '—'}</td>
     <td class="tx-actions">
       <button onclick="printSingleTx('${t.id}')" title="طباعة إيصال">🖨️</button>
-      ${__financeCanEdit(a.id) ? `<button onclick="editFinTx('${t.id}')" title="تعديل">✏️</button><button onclick="deleteFinTx('${t.id}')" title="حذف" style="color:var(--red)">🗑️</button>` : ''}
+      <button onclick="editFinTx('${t.id}')" title="تعديل">✏️</button>
+      <button onclick="deleteFinTx('${t.id}')" title="حذف" style="color:var(--red)">🗑️</button>
     </td>
   </tr>`).join('') || '<tr><td colspan="7" class="fin-no-data">لا توجد عمليات مطابقة</td></tr>';
     }
@@ -5573,7 +5495,6 @@
 
     function openFinTxModal() {
       if (!currentFinAptId) { toast('اختر شقة أولاً', '⚠️'); return; }
-      if (!__financeCanEdit(currentFinAptId)) { toast('غير مسموح — تقدر تشوف بس', '🚫'); return; }
       editingFinTxId = null; currentReceiptB64 = null;
       document.getElementById('fin-tx-modal-title').textContent = 'إضافة عملية مالية';
       document.getElementById('fin-tx-date').value = new Date().toISOString().slice(0, 10);
@@ -5584,7 +5505,6 @@
       document.getElementById('fin-tx-modal').classList.add('open');
     }
     function editFinTx(id) {
-      if (!__financeCanEdit(currentFinAptId)) { toast('غير مسموح — تقدر تشوف بس', '🚫'); return; }
       const a = finApts.find(x => x.id === currentFinAptId); if (!a) return;
       const t = (a.tx || []).find(x => x.id === id); if (!t) return;
       editingFinTxId = id; currentReceiptB64 = t.receipt || null;
@@ -5601,7 +5521,6 @@
       document.getElementById('fin-tx-modal').classList.add('open');
     }
     function saveFinTx() {
-      if (!__financeCanEdit(currentFinAptId)) { toast('غير مسموح — تقدر تشوف بس', '🚫'); return; }
       const a = finApts.find(x => x.id === currentFinAptId); if (!a) return;
       const date = document.getElementById('fin-tx-date').value;
       const desc = document.getElementById('fin-tx-desc').value.trim();
@@ -5620,7 +5539,6 @@
       save(); closeModal('fin-tx-modal'); renderFinTxs(); renderFinApts();
     }
     function deleteFinTx(id) {
-      if (!__financeCanEdit(currentFinAptId)) { toast('غير مسموح — تقدر تشوف بس', '🚫'); return; }
       if (!confirm('حذف هذه العملية؟')) return;
       const a = finApts.find(x => x.id === currentFinAptId); if (!a) return;
       const t = (a.tx || []).find(x => x.id === id);
@@ -5742,12 +5660,6 @@
       <td class="amt ${runBal >= 0 ? 'pos' : 'neg'}">${runBal.toLocaleString('ar-EG')}</td>
     </tr>`;
       }).join('') || `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:40px">لا توجد عمليات مسجلة</td></tr>`;
-      const totalsRow = txs.length ? `<tr class="totals-row">
-          <td colspan="3" style="text-align:left;padding-left:14px">الإجماليات</td>
-          <td class="amt in">${tin.toLocaleString('ar-EG')}</td>
-          <td class="amt out">${tout.toLocaleString('ar-EG')}</td>
-          <td class="amt ${bal >= 0 ? 'pos' : 'neg'}">${bal.toLocaleString('ar-EG')}</td>
-        </tr>` : '';
 
       const budgetSection = bud > 0 ? `<div class="bud-box">
     <div class="bud-head"><span>🎯 الميزانية التقديرية</span><span><b>${bud.toLocaleString('ar-EG')}</b> ج.م</span></div>
@@ -5814,14 +5726,14 @@
     table.main td.amt.neg{color:#b91c1c;font-weight:800}
     table.main tbody tr:nth-child(even){background:#fafbfd}
     .sub{font-size:10.5px;color:#94a3b8;margin-top:3px;font-weight:400}
-    table.main tr.totals-row{background:linear-gradient(90deg,#f8fafc,#eef2f7);font-weight:800;color:#0f2a4a;break-inside:avoid;page-break-inside:avoid}
-    table.main tr.totals-row td{padding:12px 8px;border-top:2px solid #0f2a4a;font-size:13px}
+    table.main tfoot tr{background:linear-gradient(90deg,#f8fafc,#eef2f7);font-weight:800;color:#0f2a4a}
+    table.main tfoot td{padding:12px 8px;border-top:2px solid #0f2a4a;font-size:13px}
     .foot{padding:18px 36px;background:#0f2a4a;color:#cbd5e1;text-align:center;font-size:11px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
     .foot .stamp{color:#fed7aa;font-weight:700}
     .toolbar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:99}
     .btn{padding:12px 26px;background:#0f2a4a;color:#fff;border:none;border-radius:30px;cursor:pointer;font-family:'Cairo';font-weight:700;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
     .btn.alt{background:#475569}.btn.print{background:#f97316;box-shadow:0 8px 24px rgba(249,115,22,.35)}
-    @media print{body{background:#fff;padding:0}.sheet{box-shadow:none;border-radius:0;max-width:none}.toolbar{display:none}.sum,.head,thead,tr.totals-row,.bud-fill,.cats thead{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    @media print{body{background:#fff;padding:0}.sheet{box-shadow:none;border-radius:0;max-width:none}.toolbar{display:none}.sum,.head,thead,tfoot tr,.bud-fill,.cats thead{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
     @media(max-width:640px){.summary{grid-template-columns:1fr}.info{grid-template-columns:1fr}.head,.info,.summary,.table-wrap,.foot,.bud-box,.cats-wrap{padding-left:20px;padding-right:20px}.bud-box,.cats-wrap{margin-left:0;margin-right:0}}
   </style></head><body>
   <div class="sheet">
@@ -5864,7 +5776,13 @@
           <th class="c" style="width:90px">مصروف</th>
           <th class="c" style="width:100px">الرصيد</th>
         </tr></thead>
-        <tbody>${rows}${totalsRow}</tbody>
+        <tbody>${rows}</tbody>
+        ${txs.length ? `<tfoot><tr>
+          <td colspan="3" style="text-align:left;padding-left:14px">الإجماليات</td>
+          <td class="amt in">${tin.toLocaleString('ar-EG')}</td>
+          <td class="amt out">${tout.toLocaleString('ar-EG')}</td>
+          <td class="amt ${bal >= 0 ? 'pos' : 'neg'}">${bal.toLocaleString('ar-EG')}</td>
+        </tr></tfoot>`: ''}
       </table>
     </div>
     <div class="foot"><div>📅 تم إنشاء الكشف في ${new Date().toLocaleString('ar-EG')}</div><div class="stamp">نظام إدارة العقارات</div></div>
@@ -6283,8 +6201,7 @@
     const DEFAULT_PERMS = {
       pages: ['apartments'],
       apt_cols: { code:true, owner:false, owner_phone:false, building:false, area:true, price:true, commission:false, floor:true, space:true, rooms:true, bathrooms:true, propType:true, finishing:true, facade:true, amenities:true, notes:true, images:true, status:true, client:true },
-      can_add_apts: false,
-      fin_scope: { all: true, view: [], edit: [] }
+      can_add_apts: false
     };
     window.__ALL_PAGES = ALL_PAGES;
     window.__APT_COLS = APT_COLS;
@@ -6296,26 +6213,7 @@
       const cols  = (p.apt_cols && typeof p.apt_cols === 'object') ? p.apt_cols : {};
       const merged = {};
       APT_COLS.forEach(c => { merged[c.key] = (c.key in cols) ? !!cols[c.key] : DEFAULT_PERMS.apt_cols[c.key]; });
-      const fsIn = (p.fin_scope && typeof p.fin_scope === 'object') ? p.fin_scope : {};
-      const fin_scope = {
-        all: fsIn.all !== undefined ? !!fsIn.all : DEFAULT_PERMS.fin_scope.all,
-        view: Array.isArray(fsIn.view) ? fsIn.view.slice() : [],
-        edit: Array.isArray(fsIn.edit) ? fsIn.edit.slice() : []
-      };
-      return { pages, apt_cols: merged, can_add_apts: !!p.can_add_apts, fin_scope };
-    }
-    // Can the current viewer edit/write into this finance apartment's accounts?
-    function __financeCanEdit(aptId) {
-      if (!window.VIEWER_MODE) return true;
-      const perms = normalizePerms(window.VIEWER_PERMS);
-      return !!(perms.fin_scope && perms.fin_scope.edit && perms.fin_scope.edit.includes(aptId));
-    }
-    // Which finance apartments can the current viewer see?
-    function __financeVisibleIds() {
-      if (!window.VIEWER_MODE) return null; // null = no restriction
-      const perms = normalizePerms(window.VIEWER_PERMS);
-      if (perms.fin_scope && perms.fin_scope.all) return null;
-      return new Set((perms.fin_scope && perms.fin_scope.view) || []);
+      return { pages, apt_cols: merged, can_add_apts: !!p.can_add_apts };
     }
 
     function applyViewerMode() {
@@ -6473,22 +6371,6 @@
             </label>
           </div>
 
-          <div class="perms-group">
-            <h4>🏦 صلاحيات الحسابات (لكل شقة)</h4>
-            <label class="perms-cap">
-              <input type="checkbox" id="perms-fin-all" data-fincap="all" ${perms.fin_scope.all?'checked':''} onchange="__permsToggleFinAll(this.checked)">
-              <span><b>🌍 يشوف كل شقق الحسابات</b> — لو اتلغت، هيشوف بس الشقق اللي تحددها له تحت.</span>
-            </label>
-            <div id="perms-fin-list" style="margin-top:10px;max-height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;${perms.fin_scope.all?'opacity:.45;pointer-events:none':''}">
-              ${finApts.length ? finApts.map(a => `<div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border-bottom:1px solid #f1f5f9;font-size:12.5px">
-                <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name || '—'}</span>
-                <label style="display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" data-finview="${a.id}" ${perms.fin_scope.view.includes(a.id)?'checked':''}> 👁️ يشوف</label>
-                <label style="display:flex;align-items:center;gap:4px;white-space:nowrap"><input type="checkbox" data-finedit="${a.id}" ${perms.fin_scope.edit.includes(a.id)?'checked':''}> ✏️ يعدل</label>
-              </div>`).join('') : '<div style="padding:10px;color:var(--gray-400);font-size:12.5px">لا توجد شقق حسابات مسجلة بعد</div>'}
-            </div>
-            <div class="perms-sub" style="margin-top:6px">تحكم فردي: حدد لكل شقة هل يقدر يشوفها، وهل يقدر يكتب فيها (يضيف/يعدل/يمسح عمليات) أم لا.</div>
-          </div>
-
           <div class="perms-actions">
             <button class="btn btn-secondary" onclick="__permsClose()">إلغاء</button>
             <button class="btn btn-primary" onclick="__permsSave('${id}')">💾 حفظ</button>
@@ -6498,10 +6380,6 @@
       bg.addEventListener('click', (e) => { if (e.target === bg) __permsClose(); });
       document.body.appendChild(bg);
       window.__permsBg = bg;
-    };
-    window.__permsToggleFinAll = function(checked) {
-      const listEl = document.getElementById('perms-fin-list');
-      if (listEl) { listEl.style.opacity = checked ? '.45' : '1'; listEl.style.pointerEvents = checked ? 'none' : 'auto'; }
     };
     window.__permsClose = function(){ if (window.__permsBg) { window.__permsBg.remove(); window.__permsBg = null; } };
     window.__permsToggleAll = function(kind, val){
@@ -6517,14 +6395,8 @@
       });
       const capCb = window.__permsBg.querySelector('[data-cap="can_add_apts"]');
       const can_add_apts = !!(capCb && capCb.checked);
-      const finAllCb = window.__permsBg.querySelector('#perms-fin-all');
-      const fin_scope = {
-        all: !!(finAllCb && finAllCb.checked),
-        view: Array.from(window.__permsBg.querySelectorAll('[data-finview]:checked')).map(cb => cb.dataset.finview),
-        edit: Array.from(window.__permsBg.querySelectorAll('[data-finedit]:checked')).map(cb => cb.dataset.finedit)
-      };
       if (!pages.length) { alert('لازم تختار قسم واحد على الأقل'); return; }
-      const { error } = await sb.from('team_viewers').update({ permissions: { pages, apt_cols, can_add_apts, fin_scope } }).eq('id', id);
+      const { error } = await sb.from('team_viewers').update({ permissions: { pages, apt_cols, can_add_apts } }).eq('id', id);
       if (error) { alert('خطأ: ' + error.message); return; }
       __permsClose();
       loadTeamViewers();
