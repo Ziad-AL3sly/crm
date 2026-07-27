@@ -1,5 +1,6 @@
 
 
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 
@@ -2059,7 +2060,7 @@
     const SUPABASE_URL = "https://geahrgetjimrnjbtrgkp.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdlYWhyZ2V0amltcm5qYnRyZ2twIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMzMzc3OTMsImV4cCI6MjA5ODkxMzc5M30.RyspH51ZsmNmsoLI6KaiJWjz_8m58oa_rOenWzf5Mgs";
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage, storageKey: 'crm_sb_session' } });
-    const CRM_KEYS = ['crm_apartments','crm_code_counters','crm_clients','crm_owners','crm_notes','crm_finapts','crm_attendance','crm_employees'];
+    const CRM_KEYS = ['crm_apartments','crm_code_counters','crm_clients','crm_owners','crm_notes','crm_finapts','crm_attendance','crm_employees','crm_apt_log'];
     window.VIEWER_MODE = false;
     window.VIEWER_OWNER_ID = null;
     window.VIEWER_PERMS = null;
@@ -2408,6 +2409,13 @@
             <div class="pill" onclick="setAptFilter('محجوزة',this)">📌 محجوزة</div>
             <div class="pill" onclick="setAptFilter('تم البيع',this)">🏁 تم البيع</div>
           </div>
+          <div class="pill-filters" id="apt-offer-filters" style="margin-top:-6px">
+            <span style="font-size:12.5px;color:#475569;font-weight:700;margin-left:4px">📂 القسم:</span>
+            <div class="pill active" onclick="setAptOfferFilter('all',this)">🗂️ الكل</div>
+            <div class="pill" onclick="setAptOfferFilter('بيع',this)">🏷️ بيع</div>
+            <div class="pill" onclick="setAptOfferFilter('إيجار',this)" style="--pill-active:#0891b2">🔑 شقق إيجار</div>
+            <div class="pill" onclick="setAptOfferFilter('قسط',this)" style="--pill-active:#7c3aed">📆 شقق قسط</div>
+          </div>
           <div class="pill-filters" id="apt-post-filters" style="margin-top:-6px">
             <div class="pill active" onclick="setAptPostFilter('all',this)">🗂️ كل حالات النشر <span id="apt-cnt-all" style="background:rgba(0,0,0,.08);padding:1px 7px;border-radius:10px;margin-right:4px;font-size:11px">0</span></div>
             <div class="pill" onclick="setAptPostFilter('posted',this)" style="--pill-active:var(--green)">📢 منشورة <span id="apt-cnt-posted" style="background:rgba(34,197,94,.15);color:#15803d;padding:1px 7px;border-radius:10px;margin-right:4px;font-size:11px;font-weight:700">0</span></div>
@@ -2464,6 +2472,37 @@
             <div id="apts-empty" class="empty-state" style="display:none">
               <div class="empty-icon">🏢</div>
               <div class="empty-title">لا توجد شقق بعد</div>
+            </div>
+          </div>
+          <div class="card" id="apt-log-card" style="margin-top:14px">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--gray-200);cursor:pointer" onclick="toggleAptLog()">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span style="font-size:16px">📜</span>
+                <div>
+                  <div style="font-weight:800;color:var(--blue-dark)">سجل نشاط الشقق</div>
+                  <div style="font-size:11.5px;color:var(--gray-500)">من ضاف/عدل/حذف شقة وامتى</div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span id="apt-log-count" style="background:var(--blue-pale);color:var(--blue-dark);padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700">0</span>
+                <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();clearAptLog()">مسح السجل</button>
+                <span id="apt-log-toggle" style="font-size:14px;color:var(--gray-500)">▼</span>
+              </div>
+            </div>
+            <div id="apt-log-body" style="max-height:340px;overflow:auto;display:none">
+              <table style="width:100%;font-size:12.5px">
+                <thead style="position:sticky;top:0;background:var(--gray-50);z-index:1">
+                  <tr>
+                    <th style="text-align:right;padding:8px">التاريخ والوقت</th>
+                    <th style="text-align:right;padding:8px">الإجراء</th>
+                    <th style="text-align:right;padding:8px">كود الشقة</th>
+                    <th style="text-align:right;padding:8px">المستخدم</th>
+                    <th style="text-align:right;padding:8px">تفاصيل</th>
+                  </tr>
+                </thead>
+                <tbody id="apt-log-tbody"></tbody>
+              </table>
+              <div id="apt-log-empty" style="text-align:center;padding:26px;color:var(--gray-400);font-size:13px;display:none">لا يوجد نشاط مسجّل بعد</div>
             </div>
           </div>
         </div>
@@ -3499,7 +3538,7 @@
             <p>إدارة كاملة بكشوف PDF، Excel، رسم بياني، تصنيفات، وفواتير مرفقة</p>
           </div>
           <div class="fin-hero-actions">
-            <button class="primary" onclick="openFinAptModal()">＋ شقة جديدة</button>
+            <button id="fin-new-apt-btn" class="primary" onclick="openFinAptModal()">＋ شقة جديدة</button>
             <button onclick="backupFin()" title="نسخة احتياطية">⬇️ نسخ احتياطي</button>
             <button onclick="document.getElementById('fin-restore-input').click()">⬆️ استعادة</button>
             <input type="file" id="fin-restore-input" accept=".json" style="display:none" onchange="restoreFin(event)">
@@ -3756,6 +3795,7 @@
           <div class="form-group"><label>نوع العرض</label><select id="apt-offer-type">
               <option value="بيع">🏷️ بيع</option>
               <option value="إيجار">🔑 إيجار</option>
+              <option value="قسط">📆 قسط</option>
             </select></div>
           <div class="form-group full"><label>✨ مميزات الشقة (اختر ما ينطبق)</label>
             <div id="apt-features-box" style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#fafbfc"></div>
@@ -3986,6 +4026,7 @@
           finApts = JSON.parse(localStorage.getItem('crm_finapts') || '[]');
           attendance = JSON.parse(localStorage.getItem('crm_attendance') || '[]');
           employees = JSON.parse(localStorage.getItem('crm_employees') || '[]');
+          aptLog = JSON.parse(localStorage.getItem('crm_apt_log') || '[]');
         } catch(e) {}
         document.getElementById('setup-screen').style.display = 'none';
         document.getElementById('login-screen').classList.remove('show');
@@ -4101,6 +4142,8 @@
     let finApts = JSON.parse(localStorage.getItem('crm_finapts') || '[]');
     let attendance = JSON.parse(localStorage.getItem('crm_attendance') || '[]');
     let employees = JSON.parse(localStorage.getItem('crm_employees') || '[]');
+    let aptLog = JSON.parse(localStorage.getItem('crm_apt_log') || '[]');
+    let aptOfferFilter = 'all';
     let currentFinAptId = null;
     let lastDeleted = null;
     let editingAptId = null, editingClientId = null, editingOwnerId = null;
@@ -4150,6 +4193,7 @@
       localStorage.setItem('crm_finapts', JSON.stringify(finApts));
       localStorage.setItem('crm_attendance', JSON.stringify(attendance));
       localStorage.setItem('crm_employees', JSON.stringify(employees));
+      localStorage.setItem('crm_apt_log', JSON.stringify(aptLog));
       try { window.CloudSync && window.CloudSync.schedulePush(); } catch(e){}
     };
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -4351,7 +4395,79 @@
     // ══════════════════════════════════════
     function setAptFilter(f, el) { aptFilter = f; document.querySelectorAll('#apt-filters .pill').forEach(p => p.classList.remove('active')); el.classList.add('active'); renderApartments() }
     function setAptPostFilter(f, el) { aptPostFilter = f; document.querySelectorAll('#apt-post-filters .pill').forEach(p => p.classList.remove('active')); el.classList.add('active'); renderApartments() }
+    function setAptOfferFilter(f, el) {
+      aptOfferFilter = f;
+      document.querySelectorAll('#apt-offer-filters .pill').forEach(p => p.classList.remove('active'));
+      if (el) el.classList.add('active');
+      renderApartments();
+    }
+    function currentUserEmail() {
+      return (window.CURRENT_EMAIL || (function(){ try { const s = JSON.parse(localStorage.getItem('crm_sb_session')||'null'); return s?.user?.email || '—'; } catch(e){ return '—'; } })());
+    }
+    function logAptAction(action, apt, extra) {
+      try {
+        const entry = {
+          id: uid(),
+          at: Date.now(),
+          by: currentUserEmail(),
+          action: action, // 'add' | 'edit' | 'delete'
+          aptId: apt ? apt.id : '',
+          code: apt ? (apt.code || '') : '',
+          building: apt ? (apt.building || '') : '',
+          area: apt ? (apt.area || '') : '',
+          offerType: apt ? (apt.offerType || 'بيع') : '',
+          extra: extra || ''
+        };
+        aptLog.unshift(entry);
+        if (aptLog.length > 500) aptLog = aptLog.slice(0, 500);
+        try { localStorage.setItem('crm_apt_log', JSON.stringify(aptLog)); } catch(e){}
+        renderAptLog();
+      } catch(e){ console.warn('logAptAction', e); }
+    }
+    function toggleAptLog() {
+      const body = document.getElementById('apt-log-body');
+      const tog = document.getElementById('apt-log-toggle');
+      if (!body) return;
+      const open = body.style.display !== 'none';
+      body.style.display = open ? 'none' : 'block';
+      if (tog) tog.textContent = open ? '▼' : '▲';
+      if (!open) renderAptLog();
+    }
+    function clearAptLog() {
+      if (!confirm('مسح سجل النشاط بالكامل؟')) return;
+      aptLog = [];
+      try { localStorage.setItem('crm_apt_log', JSON.stringify(aptLog)); } catch(e){}
+      renderAptLog();
+      toast('تم مسح السجل 🗑️');
+    }
+    function renderAptLog() {
+      const cnt = document.getElementById('apt-log-count');
+      const tb = document.getElementById('apt-log-tbody');
+      const emp = document.getElementById('apt-log-empty');
+      if (cnt) cnt.textContent = aptLog.length;
+      if (!tb) return;
+      if (!aptLog.length) { tb.innerHTML = ''; if (emp) emp.style.display = 'block'; return; }
+      if (emp) emp.style.display = 'none';
+      const labels = { add: ['➕ إضافة','#16a34a'], edit: ['✏️ تعديل','#0891b2'], delete: ['🗑️ حذف','#dc2626'] };
+      tb.innerHTML = aptLog.map(e => {
+        const lb = labels[e.action] || ['—','#64748b'];
+        const dt = new Date(e.at).toLocaleString('ar-EG');
+        const det = [e.building && ('عمارة: '+e.building), e.area && ('منطقة: '+e.area), e.offerType && ('نوع: '+e.offerType), e.extra].filter(Boolean).join(' · ');
+        return `<tr style="border-bottom:1px solid var(--gray-100)">
+          <td style="padding:8px;white-space:nowrap;color:var(--gray-600)">${dt}</td>
+          <td style="padding:8px;color:${lb[1]};font-weight:700">${lb[0]}</td>
+          <td style="padding:8px;font-weight:700">${e.code || '—'}</td>
+          <td style="padding:8px;color:var(--gray-700)" dir="ltr">${e.by || '—'}</td>
+          <td style="padding:8px;color:var(--gray-500);font-size:11.5px">${det || '—'}</td>
+        </tr>`;
+      }).join('');
+    }
+    window.setAptOfferFilter = setAptOfferFilter;
+    window.toggleAptLog = toggleAptLog;
+    window.clearAptLog = clearAptLog;
+    window.renderAptLog = renderAptLog;
     function renderApartments() {
+      try { renderAptLog(); } catch(e){}
       const q = document.getElementById('apt-search').value.toLowerCase();
       const fieldEl = document.getElementById('apt-num-field');
       const spInput = document.getElementById('apt-num-search');
@@ -4383,7 +4499,8 @@
           const af = new Set(a.features || []);
           fm = false; for (const k of aptFeatureFilter) { if (af.has(k)) { fm = true; break; } }
         }
-        return m && sm && fm && (aptFilter === 'all' || a.status === aptFilter);
+        const om = (aptOfferFilter === 'all') || ((a.offerType || 'بيع') === aptOfferFilter);
+        return m && sm && fm && om && (aptFilter === 'all' || a.status === aptFilter);
       });
       // counts update against the current search context
       const cAll = baseList.length;
@@ -4524,8 +4641,8 @@
         clients = clients.map(c => c.id === obj.clientId ? { ...c, apartmentId: obj.id } : c);
         save();
       }
-      if (editingAptId) { apartments = apartments.map(a => a.id === editingAptId ? obj : a); toast('تم تعديل الشقة ✏️') }
-      else { apartments.push(obj); toast('تمت إضافة الشقة 🏢') }
+      if (editingAptId) { apartments = apartments.map(a => a.id === editingAptId ? obj : a); logAptAction('edit', obj); toast('تم تعديل الشقة ✏️') }
+      else { apartments.push(obj); logAptAction('add', obj); toast('تمت إضافة الشقة 🏢') }
       save(); updateBadges(); closeModal('apt-modal'); renderApartments();
     }
     function deleteApartment(id) {
@@ -4536,7 +4653,8 @@
         }
       }
       if (!confirm('هل تريد حذف هذه الشقة؟')) return;
-      apartments = apartments.filter(a => a.id !== id); save(); updateBadges(); renderApartments(); toast('تم حذف الشقة', '🗑️');
+      const __toDel = apartments.find(a => a.id === id);
+      apartments = apartments.filter(a => a.id !== id); if (__toDel) logAptAction('delete', __toDel); save(); updateBadges(); renderApartments(); toast('تم حذف الشقة', '🗑️');
     }
     function toggleAptPosted(id) {
       apartments = apartments.map(a => {
@@ -5261,12 +5379,37 @@
     }
     const statusLabel = s => ({ active: 'قيد التشطيب', paused: 'متوقفة', done: 'مكتملة' }[s || 'active']);
 
+    function __viewerFinAllowed(fid) {
+      if (!window.VIEWER_MODE) return true;
+      const p = window.VIEWER_PERMS || {};
+      const allowed = Array.isArray(p.fin_apts_allowed) ? p.fin_apts_allowed : null;
+      return !allowed || allowed.includes(fid);
+    }
+    function __viewerFinCanWrite() {
+      if (!window.VIEWER_MODE) return true;
+      const p = window.VIEWER_PERMS || {};
+      return !!p.fin_can_write;
+    }
+    function __viewerFinCanAddApt() {
+      if (!window.VIEWER_MODE) return true;
+      const p = window.VIEWER_PERMS || {};
+      return !!p.fin_can_add_apt;
+    }
+    function __guardFinWrite() {
+      if (!__viewerFinCanWrite()) { toast('ما عندكش صلاحية الكتابة في الحسابات', '🚫'); return false; }
+      return true;
+    }
+    function __guardFinAddApt() {
+      if (!__viewerFinCanAddApt()) { toast('ما عندكش صلاحية إضافة شقة جديدة في الحسابات', '🚫'); return false; }
+      return true;
+    }
     function renderFinApts() {
       updateFinNavCount();
       const q = (document.getElementById('fin-search')?.value || '').trim().toLowerCase();
       const sf = document.getElementById('fin-status-filter')?.value || '';
       let list = finApts.filter(a => !q || (a.name || '').toLowerCase().includes(q) || (a.address || '').toLowerCase().includes(q) || (a.owner || '').toLowerCase().includes(q));
       if (sf) list = list.filter(a => (a.status || 'active') === sf);
+      if (window.VIEWER_MODE) list = list.filter(a => __viewerFinAllowed(a.id));
       const wrap = document.getElementById('fin-apts-list');
       if (!list.length) {
         wrap.innerHTML = '<div class="fin-empty"><div class="icon">📭</div><div style="font-size:15px;font-weight:700;color:var(--gray-500);margin-bottom:5px">لا توجد شقق</div><div style="font-size:12.5px">اضغط "شقة جديدة" لبدء التسجيل</div></div>';
@@ -5289,7 +5432,7 @@
           <div class="fin-card-name">${a.name || '—'}</div>
           ${a.address ? `<div class="fin-card-addr">📍 ${a.address}</div>` : ''}
         </div>
-        <div class="fin-card-actions" onclick="event.stopPropagation()">
+        <div class="fin-card-actions" onclick="event.stopPropagation()" style="${__viewerFinCanWrite()?'':'display:none'}">
           <button onclick="editFinApt('${a.id}')" title="تعديل">✏️</button>
           <button onclick="deleteFinApt('${a.id}')" title="حذف">🗑️</button>
         </div>
@@ -5310,6 +5453,7 @@
     }
 
     function openFinAptModal() {
+      if (!__guardFinAddApt()) return;
       editingFinAptId = null;
       document.getElementById('fin-apt-modal-title').textContent = 'إضافة شقة';
       ['fin-apt-name', 'fin-apt-address', 'fin-apt-owner', 'fin-apt-phone', 'fin-apt-budget', 'fin-apt-notes'].forEach(id => document.getElementById(id).value = '');
@@ -5317,6 +5461,7 @@
       document.getElementById('fin-apt-modal').classList.add('open');
     }
     function editFinApt(id) {
+      if (!__guardFinWrite()) return;
       const a = finApts.find(x => x.id === id); if (!a) return;
       editingFinAptId = id;
       document.getElementById('fin-apt-modal-title').textContent = 'تعديل الشقة';
@@ -5350,6 +5495,7 @@
       if (!confirm('حذف الشقة وكل عملياتها؟')) return;
       const a = finApts.find(x => x.id === id);
       lastDeleted = { type: 'apt', data: JSON.parse(JSON.stringify(a)) };
+      if (!__guardFinWrite()) return;
       finApts = finApts.filter(x => x.id !== id);
       if (currentFinAptId === id) closeFinDetails();
       save(); renderFinApts(); showUndo('تم حذف الشقة');
@@ -5374,6 +5520,7 @@
     }
 
     function openFinDetails(id) {
+      if (window.VIEWER_MODE && !__viewerFinAllowed(id)) { toast('ما عندكش صلاحية على الشقة دي', '🚫'); return; }
       currentFinAptId = id;
       const a = finApts.find(x => x.id === id); if (!a) return;
       document.getElementById('fin-details-card').style.display = '';
@@ -5733,7 +5880,27 @@
     .toolbar{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:99}
     .btn{padding:12px 26px;background:#0f2a4a;color:#fff;border:none;border-radius:30px;cursor:pointer;font-family:'Cairo';font-weight:700;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
     .btn.alt{background:#475569}.btn.print{background:#f97316;box-shadow:0 8px 24px rgba(249,115,22,.35)}
-    @media print{body{background:#fff;padding:0}.sheet{box-shadow:none;border-radius:0;max-width:none}.toolbar{display:none}.sum,.head,thead,tfoot tr,.bud-fill,.cats thead{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    .grand-totals{margin-top:14px;border:2px solid #0f2a4a;border-radius:12px;overflow:hidden;page-break-inside:avoid;break-inside:avoid}
+    .grand-totals .gt-title{background:#0f2a4a;color:#fff;padding:10px 14px;font-weight:800;font-size:14px}
+    .grand-totals .gt-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0;background:#fff}
+    .grand-totals .gt-cell{padding:14px;display:flex;flex-direction:column;gap:6px;border-left:1px solid #e2e8f0;font-weight:700}
+    .grand-totals .gt-cell:last-child{border-left:none}
+    .grand-totals .gt-cell span{font-size:12px;color:#64748b;font-weight:600}
+    .grand-totals .gt-cell b{font-size:18px}
+    .grand-totals .gt-cell.in b{color:#16a34a}
+    .grand-totals .gt-cell.out b{color:#dc2626}
+    .grand-totals .gt-cell.pos b{color:#1a4b8c}
+    .grand-totals .gt-cell.neg b{color:#b91c1c}
+    @media(max-width:640px){.grand-totals .gt-grid{grid-template-columns:1fr}.grand-totals .gt-cell{border-left:none;border-top:1px solid #e2e8f0}.grand-totals .gt-cell:first-child{border-top:none}}
+    @media print{
+      body{background:#fff;padding:0}
+      .sheet{box-shadow:none;border-radius:0;max-width:none}
+      .toolbar{display:none}
+      .sum,.head,thead,.bud-fill,.cats thead,.grand-totals .gt-title{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      table.main thead{display:table-header-group}
+      table.main tfoot{display:none}
+      .grand-totals{page-break-inside:avoid;break-inside:avoid}
+    }
     @media(max-width:640px){.summary{grid-template-columns:1fr}.info{grid-template-columns:1fr}.head,.info,.summary,.table-wrap,.foot,.bud-box,.cats-wrap{padding-left:20px;padding-right:20px}.bud-box,.cats-wrap{margin-left:0;margin-right:0}}
   </style></head><body>
   <div class="sheet">
@@ -5777,13 +5944,15 @@
           <th class="c" style="width:100px">الرصيد</th>
         </tr></thead>
         <tbody>${rows}</tbody>
-        ${txs.length ? `<tfoot><tr>
-          <td colspan="3" style="text-align:left;padding-left:14px">الإجماليات</td>
-          <td class="amt in">${tin.toLocaleString('ar-EG')}</td>
-          <td class="amt out">${tout.toLocaleString('ar-EG')}</td>
-          <td class="amt ${bal >= 0 ? 'pos' : 'neg'}">${bal.toLocaleString('ar-EG')}</td>
-        </tr></tfoot>`: ''}
       </table>
+      ${txs.length ? `<div class="grand-totals">
+        <div class="gt-title">📊 الإجماليات</div>
+        <div class="gt-grid">
+          <div class="gt-cell in"><span>إجمالي الإيرادات</span><b>${tin.toLocaleString('ar-EG')} ج.م</b></div>
+          <div class="gt-cell out"><span>إجمالي المصروفات</span><b>${tout.toLocaleString('ar-EG')} ج.م</b></div>
+          <div class="gt-cell ${bal >= 0 ? 'pos' : 'neg'}"><span>صافي الرصيد</span><b>${bal.toLocaleString('ar-EG')} ج.م</b></div>
+        </div>
+      </div>` : ''}
     </div>
     <div class="foot"><div>📅 تم إنشاء الكشف في ${new Date().toLocaleString('ar-EG')}</div><div class="stamp">نظام إدارة العقارات</div></div>
   </div>
@@ -6201,7 +6370,13 @@
     const DEFAULT_PERMS = {
       pages: ['apartments'],
       apt_cols: { code:true, owner:false, owner_phone:false, building:false, area:true, price:true, commission:false, floor:true, space:true, rooms:true, bathrooms:true, propType:true, finishing:true, facade:true, amenities:true, notes:true, images:true, status:true, client:true },
-      can_add_apts: false
+      can_add_apts: false,
+      // Finance section:
+      // fin_apts_allowed = null OR [] means ALL finance apartments visible.
+      // Provide array of IDs to restrict.
+      fin_apts_allowed: null,
+      fin_can_write: false,
+      fin_can_add_apt: false
     };
     window.__ALL_PAGES = ALL_PAGES;
     window.__APT_COLS = APT_COLS;
@@ -6213,7 +6388,8 @@
       const cols  = (p.apt_cols && typeof p.apt_cols === 'object') ? p.apt_cols : {};
       const merged = {};
       APT_COLS.forEach(c => { merged[c.key] = (c.key in cols) ? !!cols[c.key] : DEFAULT_PERMS.apt_cols[c.key]; });
-      return { pages, apt_cols: merged, can_add_apts: !!p.can_add_apts };
+      const finAllowed = Array.isArray(p.fin_apts_allowed) ? p.fin_apts_allowed : null;
+      return { pages, apt_cols: merged, can_add_apts: !!p.can_add_apts, fin_apts_allowed: finAllowed, fin_can_write: !!p.fin_can_write, fin_can_add_apt: !!p.fin_can_add_apt };
     }
 
     function applyViewerMode() {
@@ -6249,7 +6425,10 @@
         b.id = 'viewer-badge'; b.className = 'viewer-badge';
         b.textContent = perms.can_add_apts ? '👁️ عرض + ➕ إضافة شقق' : '👁️ وضع العرض فقط';
         topbar.appendChild(b);
-      }
+      // Hide "new finance apartment" button when viewer lacks that permission
+      const finNewBtn = document.getElementById('fin-new-apt-btn');
+      if (finNewBtn) finNewBtn.style.display = perms.fin_can_add_apt ? '' : 'none';
+    }
     }
     window.applyViewerMode = applyViewerMode;
 
@@ -6371,6 +6550,30 @@
             </label>
           </div>
 
+          <div class="perms-group">
+            <h4>💰 صلاحيات قسم الحسابات</h4>
+            <label class="perms-cap">
+              <input type="checkbox" data-cap="fin_can_write" ${perms.fin_can_write?'checked':''}>
+              <span><b>✍️ الكتابة في الحسابات</b> — يقدر يضيف/يعدل/يمسح عمليات داخل الشقق المسموحة (لو مش مفعّل يبقى عرض فقط).</span>
+            </label>
+            <label class="perms-cap">
+              <input type="checkbox" data-cap="fin_can_add_apt" ${perms.fin_can_add_apt?'checked':''}>
+              <span><b>🏗️ إنشاء حساب شقة جديدة</b> — يقدر يضيف شقة جديدة في قسم الحسابات (مستقل عن صلاحية الكتابة في العمليات).</span>
+            </label>
+            <div class="perms-sub" style="margin-top:10px">🏢 اختار الشقق اللي يقدر يشوف حساباتها (لو ماخترتش أي شقة معناها هيشوف كل الشقق):</div>
+            <div class="perms-toolbar">
+              <button type="button" onclick="__permsToggleAll('fin',true)">✔️ تحديد الكل</button>
+              <button type="button" onclick="__permsToggleAll('fin',false)">✖️ إلغاء الكل</button>
+            </div>
+            <div class="perms-grid" id="__perms-fin-grid">
+              ${(typeof finApts !== 'undefined' ? finApts : []).map(fa => {
+                const allowed = Array.isArray(perms.fin_apts_allowed) ? perms.fin_apts_allowed : null;
+                const checked = !allowed || allowed.includes(fa.id);
+                return `<label><input type="checkbox" data-fin="${fa.id}" ${checked?'checked':''}> ${fa.name || '—'}${fa.owner?' · '+fa.owner:''}</label>`;
+              }).join('') || '<div style="color:var(--gray-500);font-size:12px">لا توجد شقق حسابات بعد</div>'}
+            </div>
+          </div>
+
           <div class="perms-actions">
             <button class="btn btn-secondary" onclick="__permsClose()">إلغاء</button>
             <button class="btn btn-primary" onclick="__permsSave('${id}')">💾 حفظ</button>
@@ -6383,7 +6586,7 @@
     };
     window.__permsClose = function(){ if (window.__permsBg) { window.__permsBg.remove(); window.__permsBg = null; } };
     window.__permsToggleAll = function(kind, val){
-      const sel = kind === 'pg' ? '[data-pg]' : '[data-col]';
+      const sel = kind === 'pg' ? '[data-pg]' : (kind === 'col' ? '[data-col]' : '[data-fin]');
       window.__permsBg.querySelectorAll(sel).forEach(cb => cb.checked = val);
     };
     window.__permsSave = async function(id) {
@@ -6395,8 +6598,17 @@
       });
       const capCb = window.__permsBg.querySelector('[data-cap="can_add_apts"]');
       const can_add_apts = !!(capCb && capCb.checked);
+      const finWriteCb = window.__permsBg.querySelector('[data-cap="fin_can_write"]');
+      const fin_can_write = !!(finWriteCb && finWriteCb.checked);
+      const finAddCb = window.__permsBg.querySelector('[data-cap="fin_can_add_apt"]');
+      const fin_can_add_apt = !!(finAddCb && finAddCb.checked);
+      // Collect fin apt selection
+      const allFinCbs = Array.from(window.__permsBg.querySelectorAll('[data-fin]'));
+      const checkedFin = allFinCbs.filter(cb => cb.checked).map(cb => cb.dataset.fin);
+      // If all boxes are checked (or none exist) => null means "all"
+      const fin_apts_allowed = (!allFinCbs.length || checkedFin.length === allFinCbs.length) ? null : checkedFin;
       if (!pages.length) { alert('لازم تختار قسم واحد على الأقل'); return; }
-      const { error } = await sb.from('team_viewers').update({ permissions: { pages, apt_cols, can_add_apts } }).eq('id', id);
+      const { error } = await sb.from('team_viewers').update({ permissions: { pages, apt_cols, can_add_apts, fin_apts_allowed, fin_can_write, fin_can_add_apt } }).eq('id', id);
       if (error) { alert('خطأ: ' + error.message); return; }
       __permsClose();
       loadTeamViewers();
