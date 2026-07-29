@@ -6394,11 +6394,16 @@
 
     function applyViewerMode() {
       if (!window.VIEWER_MODE) return;
-      const perms = normalizePerms(window.VIEWER_PERMS);
+      const rawPerms = (window.VIEWER_PERMS && typeof window.VIEWER_PERMS === 'object') ? window.VIEWER_PERMS : {};
+      window.VIEWER_PERMS_RAW = rawPerms;
+      const perms = normalizePerms(rawPerms);
       // Keep the normalized perms on window so save/edit gates read the same shape
       window.VIEWER_PERMS = perms;
+      const rawIsClient = !!rawPerms._is_client;
       document.body.classList.add('viewer-mode');
       document.body.classList.toggle('viewer-can-write', !!perms.can_add_apts);
+      document.body.classList.toggle('client-mode', rawIsClient);
+
       const allowed = new Set(perms.pages);
       document.querySelectorAll('.nav-item').forEach(el => {
         const t = (el.textContent || '').trim();
@@ -6423,14 +6428,125 @@
       if (topbar && !document.getElementById('viewer-badge')) {
         const b = document.createElement('span');
         b.id = 'viewer-badge'; b.className = 'viewer-badge';
-        b.textContent = perms.can_add_apts ? '👁️ عرض + ➕ إضافة شقق' : '👁️ وضع العرض فقط';
+        b.textContent = rawIsClient ? '👤 حساب عميل — شقتك فقط' : (perms.can_add_apts ? '👁️ عرض + ➕ إضافة شقق' : '👁️ وضع العرض فقط');
         topbar.appendChild(b);
+      }
       // Hide "new finance apartment" button when viewer lacks that permission
       const finNewBtn = document.getElementById('fin-new-apt-btn');
       if (finNewBtn) finNewBtn.style.display = perms.fin_can_add_apt ? '' : 'none';
-    }
+      // Inject client-mode simplified styles once
+      if (rawIsClient && !document.getElementById('client-mode-style')) {
+        const cs = document.createElement('style');
+        cs.id = 'client-mode-style';
+        cs.textContent = `
+          body.client-mode .sidebar, body.client-mode .bottom-nav, body.client-mode .nav-item[data-viewer-hide] { display:none !important; }
+          body.client-mode .main-content, body.client-mode .content, body.client-mode main { margin-right:0 !important; margin-left:0 !important; padding:12px !important; }
+          body.client-mode .topbar { justify-content:center; }
+          body.client-mode #client-hero { background:linear-gradient(135deg,#059669,#10b981); color:#fff; padding:18px 16px; border-radius:14px; margin:8px 0 16px; text-align:center; box-shadow:0 6px 20px rgba(16,185,129,.25); }
+          body.client-mode #client-hero h2 { margin:0 0 4px; font-size:20px; font-weight:800; }
+          body.client-mode #client-hero p { margin:0; font-size:13px; opacity:.95; }
+          body.client-mode .fin-apts-grid, body.client-mode .fin-apts { grid-template-columns:1fr !important; }
+          body.client-mode button.btn-danger, body.client-mode .btn-danger { display:none !important; }
+          @media (max-width:640px){
+            body.client-mode .topbar h1, body.client-mode .topbar .brand { font-size:16px; }
+            body.client-mode table { font-size:12px; }
+          }
+        `;
+        document.head.appendChild(cs);
+        // Add hero banner inside finance page
+        const finPage = document.getElementById('page-finapts') || document.getElementById('page-finance');
+        if (finPage && !document.getElementById('client-hero')) {
+          const hero = document.createElement('div');
+          hero.id = 'client-hero';
+          hero.innerHTML = `<h2>👋 أهلاً بيك</h2><p>دي حسابات شقتك — عرض فقط، أي عملية تتسجل بتظهر هنا فوراً.</p>`;
+          finPage.insertBefore(hero, finPage.firstChild);
+        }
+      }
     }
     window.applyViewerMode = applyViewerMode;
+
+    // ===== Live permission refresh (no page reload needed) =====
+    // Re-fetches the signed-in member's row, updates perms + cached data, re-renders.
+    let __permRefreshing = false;
+    async function refreshViewerPerms(opts) {
+      if (__permRefreshing) return;
+      __permRefreshing = true;
+      try {
+        const { data: u } = await sb.auth.getUser();
+        if (!u?.user) return;
+        const email = (u.user.email || '').toLowerCase();
+        const { data: inv } = await sb.from('team_viewers')
+          .select('owner_id,permissions,role').ilike('viewer_email', email).limit(1).maybeSingle();
+
+        if (!inv || !inv.owner_id || inv.owner_id === u.user.id) {
+          // Access revoked → drop viewer mode
+          if (window.VIEWER_MODE || window.EDITOR_MODE) {
+            window.VIEWER_MODE = false; window.VIEWER_OWNER_ID = null; window.VIEWER_PERMS = null;
+            window.EDITOR_MODE = false; window.EDITOR_OWNER_ID = null;
+            document.body.classList.remove('viewer-mode','viewer-can-write','client-mode');
+            const b0 = document.getElementById('viewer-badge'); if (b0) b0.remove();
+            if (typeof toast === 'function') toast('⚠️ تم تعديل صلاحياتك');
+          }
+          return;
+        }
+
+        if (inv.role === 'editor') {
+          window.EDITOR_MODE = true; window.EDITOR_OWNER_ID = inv.owner_id;
+          window.VIEWER_MODE = false; window.VIEWER_PERMS = null;
+          document.body.classList.remove('viewer-mode','viewer-can-write','client-mode');
+          const b1 = document.getElementById('viewer-badge'); if (b1) b1.remove();
+        } else {
+          window.EDITOR_MODE = false; window.EDITOR_OWNER_ID = null;
+          window.VIEWER_MODE = true;
+          window.VIEWER_OWNER_ID = inv.owner_id;
+          window.VIEWER_PERMS = inv.permissions || {};
+          // rebuild badge with the new label
+          const b2 = document.getElementById('viewer-badge'); if (b2) b2.remove();
+          applyViewerMode();
+        }
+
+        // Pull the owner's latest data into the local cache so newly allowed
+        // apartments/accounts appear immediately.
+        try { await window.CloudSync.pullToLocal(); } catch (e) { console.warn('perm pull failed', e); }
+        try { if (typeof loadAll === 'function') loadAll(); } catch (e) {}
+        ['renderApartments','renderFinApts','renderFinTxs','renderDashboard','renderAptLog','renderOwners','renderClients']
+          .forEach(fn => { try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {} });
+
+        if (opts && opts.notify && typeof toast === 'function') toast('🔄 تم تحديث صلاحياتك');
+      } catch (e) {
+        console.warn('refreshViewerPerms failed', e);
+      } finally {
+        __permRefreshing = false;
+      }
+    }
+    window.refreshViewerPerms = refreshViewerPerms;
+
+    // Realtime: react the moment the owner saves permissions for this member.
+    (function subscribePerms() {
+      try {
+        sb.channel('tv-perms-' + Math.random().toString(36).slice(2))
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'team_viewers' }, (payload) => {
+            const email = (window.CURRENT_EMAIL || '').toLowerCase();
+            if (!email) return;
+            const row = payload.new || payload.old || {};
+            const rowEmail = (row.viewer_email || '').toLowerCase();
+            if (rowEmail && rowEmail !== email) return;
+            refreshViewerPerms({ notify: true });
+          })
+          .subscribe();
+      } catch (e) { console.warn('perm realtime unavailable', e); }
+    })();
+
+    // Fallbacks in case realtime is disabled on the project.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && (window.VIEWER_MODE || window.EDITOR_MODE)) refreshViewerPerms();
+    });
+    setInterval(() => {
+      if (!document.hidden && (window.VIEWER_MODE || window.EDITOR_MODE)) refreshViewerPerms();
+    }, 30000);
+
+
+
 
     // ownerScope() = whose viewers list are we managing? owner sees their own; editor manages the owner's list
     function ownerScope(uid) {
@@ -6451,23 +6567,32 @@
         window.__TV_CACHE[r.id] = r;
         const p = normalizePerms(r.permissions);
         const isEditor = r.role === 'editor';
+        const isClient = !isEditor && !!(r.permissions && r.permissions._is_client);
         const isSelf = window.EDITOR_MODE && r.viewer_email.toLowerCase() === currentEmail;
         const extra = p.can_add_apts ? ' · ➕ يضيف شقق' : '';
+        const aptsCount = Array.isArray(p.fin_apts_allowed) ? p.fin_apts_allowed.length : 0;
         const summary = isEditor
           ? '👑 مشرف — صلاحيات كاملة (يعدل ويمسح زي المالك)'
-          : `👁️ عرض فقط · ${p.pages.length} قسم · ${Object.values(p.apt_cols).filter(Boolean).length}/${APT_COLS.length} عمود${extra}`;
+          : (isClient
+              ? `👤 عميل — عرض فقط لـ ${aptsCount} شقة في الحسابات`
+              : `👁️ عرض فقط · ${p.pages.length} قسم · ${Object.values(p.apt_cols).filter(Boolean).length}/${APT_COLS.length} عمود${extra}`);
         const selfBadge = isSelf ? '<span style="background:#dbeafe;color:#1e40af;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-right:4px">أنت</span>' : '';
+        const clientBadge = isClient ? '<span style="background:#dcfce7;color:#166534;font-size:10px;font-weight:700;padding:1px 6px;border-radius:999px;margin-right:4px">عميل</span>' : '';
+        const permsBtn = isEditor ? '' : (isClient
+          ? `<button class="btn btn-secondary btn-sm" onclick="openInviteClientModal('${r.id}')">🏢 شققه</button>`
+          : `<button class="btn btn-secondary btn-sm" onclick="openPermsModal('${r.id}')">⚙️ الصلاحيات</button>`);
+        const roleSelect = isClient ? '' : `<select onchange="changeTeamRole('${r.id}', this.value)" ${isSelf?'disabled title="مش تقدر تغير دورك بنفسك"':''} style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
+              <option value="viewer" ${!isEditor?'selected':''}>👁️ عرض فقط</option>
+              <option value="editor" ${isEditor?'selected':''}>👑 مشرف (تعديل)</option>
+            </select>`;
         return `<div class="tv-row">
           <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
-            <span class="tv-email">${selfBadge}${r.viewer_email}</span>
+            <span class="tv-email">${clientBadge}${selfBadge}${r.viewer_email}</span>
             <span style="font-size:11px;color:#6b7280">${summary}</span>
           </div>
           <div class="tv-actions" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <select onchange="changeTeamRole('${r.id}', this.value)" ${isSelf?'disabled title="مش تقدر تغير دورك بنفسك"':''} style="padding:6px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:12px">
-              <option value="viewer" ${!isEditor?'selected':''}>👁️ عرض فقط</option>
-              <option value="editor" ${isEditor?'selected':''}>👑 مشرف (تعديل)</option>
-            </select>
-            ${isEditor ? '' : `<button class="btn btn-secondary btn-sm" onclick="openPermsModal('${r.id}')">⚙️ الصلاحيات</button>`}
+            ${roleSelect}
+            ${permsBtn}
             <button class="btn btn-danger btn-sm" ${isSelf?'disabled':''} onclick="removeTeamViewer('${r.id}')">🗑️ إزالة</button>
           </div>
         </div>`;
@@ -6476,18 +6601,50 @@
     }
     window.loadTeamViewers = loadTeamViewers;
 
-    window.addTeamViewer = async function() {
+    window.addTeamViewer = async function(btn) {
       const inp = document.getElementById('tv-email-input');
+      if (!inp) { alert('حقل الإيميل مش موجود'); return; }
       const email = (inp.value || '').trim().toLowerCase();
       if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { alert('من فضلك أدخل إيميل صحيح'); return; }
-      const { data: u } = await sb.auth.getUser(); if (!u?.user) return;
-      const scope = ownerScope(u.user.id);
-      const { error } = await sb.from('team_viewers').insert({ owner_id: scope, viewer_email: email, permissions: DEFAULT_PERMS });
-      if (error) { alert('خطأ: ' + error.message); return; }
-      inp.value = '';
-      loadTeamViewers();
-      if (typeof toast === 'function') toast('✅ تمت الإضافة');
+      const button = (btn && btn.tagName === 'BUTTON') ? btn : null;
+      if (button) { button.disabled = true; button.dataset._t = button.textContent; button.textContent = '... جاري الإضافة'; }
+      try {
+        const { data: u, error: uErr } = await sb.auth.getUser();
+        if (uErr || !u?.user) { alert('لازم تسجل دخول الأول'); return; }
+        const scope = ownerScope(u.user.id);
+        if (!scope) { alert('تعذّر تحديد الحساب المالك — اعمل تحديث للصفحة وجرب تاني'); return; }
+        if (email === (u.user.email || '').toLowerCase()) { alert('ده إيميلك انت، مش محتاج تضيفه'); return; }
+
+        // لو العضو موجود قبل كده، منحاولش نضيفه تاني (unique constraint)
+        const { data: exist } = await sb.from('team_viewers')
+          .select('id').eq('owner_id', scope).ilike('viewer_email', email).limit(1);
+        if (exist && exist.length) { alert('الإيميل ده مضاف قبل كده في الفريق'); inp.value = ''; loadTeamViewers(); return; }
+
+        const { data: ins, error } = await sb.from('team_viewers')
+          .insert({ owner_id: scope, viewer_email: email, role: 'viewer', permissions: DEFAULT_PERMS })
+          .select('id');
+        if (error) {
+          console.error('addTeamViewer error', error);
+          const msg = /duplicate|unique/i.test(error.message || '')
+            ? 'الإيميل ده مضاف قبل كده'
+            : (/row-level security|policy|permission/i.test(error.message || '')
+                ? 'مالكش صلاحية تضيف أعضاء على الحساب ده'
+                : (error.message || 'خطأ غير معروف'));
+          alert('تعذّرت الإضافة: ' + msg);
+          return;
+        }
+        if (!ins || !ins.length) { alert('تعذّرت الإضافة — الصف مااتسجلش. جرّب تاني.'); return; }
+        inp.value = '';
+        await loadTeamViewers();
+        if (typeof toast === 'function') toast('✅ تمت الإضافة');
+      } catch (e) {
+        console.error(e);
+        alert('حصل خطأ: ' + (e?.message || e));
+      } finally {
+        if (button) { button.disabled = false; button.textContent = button.dataset._t || '+ إضافة عضو'; }
+      }
     };
+
 
     window.removeTeamViewer = async function(id) {
       if (!confirm('إزالة هذا العضو؟')) return;
@@ -6615,6 +6772,95 @@
       if (typeof toast === 'function') toast('✅ تم حفظ الصلاحيات');
     };
 
+    // ===== Client invites (finance-only, read-only, restricted apartments) =====
+    window.openInviteClientModal = function(existingId){
+      const rec = existingId ? (window.__TV_CACHE || {})[existingId] : null;
+      const emailInp = document.getElementById('client-email-input');
+      const email = rec ? rec.viewer_email : ((emailInp && emailInp.value || '').trim().toLowerCase());
+      if (!rec) {
+        if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { alert('من فضلك أدخل إيميل صحيح للعميل'); return; }
+      }
+      const perms = rec ? normalizePerms(rec.permissions) : null;
+      const apts = (typeof finApts !== 'undefined' ? finApts : []) || [];
+      const allowedSet = perms && Array.isArray(perms.fin_apts_allowed) ? new Set(perms.fin_apts_allowed) : null;
+      const bg = document.createElement('div');
+      bg.className = 'perms-modal-bg';
+      bg.innerHTML = `
+        <div class="perms-modal" onclick="event.stopPropagation()">
+          <h3>👤 ${rec ? 'شقق العميل' : 'دعوة عميل'}: ${email}</h3>
+          <div class="perms-sub">اختار الشقة/الشقق اللي هيقدر العميل يشوف حساباتها (عرض فقط، من غير أي تعديل).</div>
+          <div class="perms-group">
+            <div class="perms-toolbar">
+              <button type="button" onclick="__permsToggleAll('fin',true)">✔️ تحديد الكل</button>
+              <button type="button" onclick="__permsToggleAll('fin',false)">✖️ إلغاء الكل</button>
+            </div>
+            <div class="perms-grid">
+              ${apts.length ? apts.map(fa => {
+                const checked = allowedSet ? allowedSet.has(fa.id) : false;
+                return `<label><input type="checkbox" data-fin="${fa.id}" ${checked?'checked':''}> ${fa.name || '—'}${fa.owner?' · '+fa.owner:''}</label>`;
+              }).join('') : '<div style="color:var(--gray-500);font-size:12px">لا توجد شقق في قسم الحسابات بعد — أضف شقة أولاً</div>'}
+            </div>
+          </div>
+          <div class="perms-actions">
+            <button class="btn btn-secondary" onclick="__permsClose()">إلغاء</button>
+            <button class="btn btn-primary" id="__client-save-btn">💾 حفظ${rec ? '' : ' وإرسال دعوة'}</button>
+          </div>
+        </div>`;
+      bg.addEventListener('click',(e)=>{ if(e.target===bg) __permsClose(); });
+      document.body.appendChild(bg);
+      window.__permsBg = bg;
+      const saveBtn = bg.querySelector('#__client-save-btn');
+      if (saveBtn) saveBtn.addEventListener('click', () => __clientSave(existingId || null, email));
+    };
+
+    window.__clientSave = async function(id, email){
+      const cbs = Array.from(window.__permsBg.querySelectorAll('[data-fin]:checked')).map(cb => cb.dataset.fin);
+      if (!cbs.length) { alert('اختار شقة واحدة على الأقل للعميل'); return; }
+      const apt_cols = {};
+      window.__APT_COLS.forEach(c => { apt_cols[c.key] = false; });
+      const permsPayload = {
+        pages: ['finapts'],
+        apt_cols,
+        can_add_apts: false,
+        fin_apts_allowed: cbs,
+        fin_can_write: false,
+        fin_can_add_apt: false,
+        _is_client: true
+      };
+      if (id) {
+        const { error } = await sb.from('team_viewers').update({ permissions: permsPayload, role: 'viewer' }).eq('id', id);
+        if (error) { alert('خطأ: ' + error.message); return; }
+        __permsClose();
+        loadTeamViewers();
+        if (typeof toast === 'function') toast('✅ تم تحديث شقق العميل');
+      } else {
+        const { data: u } = await sb.auth.getUser(); if (!u?.user) return;
+        const scope = ownerScope(u.user.id);
+        const { error } = await sb.from('team_viewers').insert({ owner_id: scope, viewer_email: email, permissions: permsPayload, role: 'viewer' });
+        if (error) { alert('خطأ: ' + error.message); return; }
+        const inp = document.getElementById('client-email-input'); if (inp) inp.value = '';
+        __permsClose();
+        loadTeamViewers();
+        // Send magic-link invite so the client can activate/login in one click
+        let inviteMsg = '✅ تم إضافة العميل';
+        try {
+          const redirect = window.location.origin + window.location.pathname;
+          const { error: otpErr } = await sb.auth.signInWithOtp({
+            email,
+            options: { shouldCreateUser: true, emailRedirectTo: redirect }
+          });
+          if (otpErr) {
+            console.warn('invite email failed', otpErr);
+            inviteMsg = '✅ تم إضافة العميل (تعذّر إرسال الإيميل — بلّغه يسجّل بنفس الإيميل)';
+          } else {
+            inviteMsg = '✅ تم إضافة العميل وإرسال رابط الدخول على إيميله 📧';
+          }
+        } catch(e) { console.warn('invite email failed', e); }
+        if (typeof toast === 'function') toast(inviteMsg);
+        else alert(inviteMsg);
+      }
+    };
+
     function injectTeamSection() {
       if (window.VIEWER_MODE) return; // pure viewers don't manage team; owners + editors do
       const settingsPage = document.getElementById('page-settings');
@@ -6633,12 +6879,22 @@
         </p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input type="email" id="tv-email-input" placeholder="example@mail.com" style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--gray-300,#d1d5db);border-radius:8px">
-          <button class="btn btn-primary" onclick="addTeamViewer()">+ إضافة عضو</button>
+          <button class="btn btn-primary" onclick="addTeamViewer(this)">+ إضافة عضو</button>
+
         </div>
         <div id="team-viewers-list"></div>
         <p style="margin-top:10px;font-size:12px;color:var(--gray-500)">
           العضو لازم يعمل حساب بنفس الإيميل ده من شاشة الدخول عشان يقدر يشوف بياناتك.
         </p>
+        <hr style="margin:20px 0;border:none;border-top:1px dashed var(--gray-300,#d1d5db)">
+        <h3 style="margin-top:0">👤 حسابات العملاء (Clients)</h3>
+        <p style="font-size:13px;color:var(--gray-500);margin-bottom:12px">
+          ادعِ عميلك بإيميله، واختار الشقة/الشقق اللي هيقدر يشوف حساباتها. العميل هيشوف <b>قسم الحسابات فقط</b>، وللشقق المخصصة له بس، <b>عرض فقط</b> بدون أي صلاحية تعديل أو إضافة. لازم يعمل حساب بنفس الإيميل ده من شاشة الدخول.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input type="email" id="client-email-input" placeholder="client@mail.com" style="flex:1;min-width:200px;padding:10px 12px;border:1px solid var(--gray-300,#d1d5db);border-radius:8px">
+          <button class="btn btn-primary" onclick="openInviteClientModal()">+ دعوة عميل</button>
+        </div>
       `;
       settingsPage.appendChild(sec);
       loadTeamViewers();
