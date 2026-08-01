@@ -2068,11 +2068,21 @@
     window.EDITOR_OWNER_ID = null;
     window.CURRENT_EMAIL = '';
     window.CURRENT_UID = '';
-    // Viewer can push when explicitly granted can_add_apts (still only edits/deletes their own rows via UI gating)
+    // A viewer never gets owner-wide cloud write access. Viewer writes are
+    // handled by guarded UI actions only; pushing the complete owner blob would
+    // let a restricted member overwrite data outside their scope.
     function __viewerCanWrite() {
       return !!(window.VIEWER_MODE && window.VIEWER_PERMS && window.VIEWER_PERMS.can_add_apts);
     }
     window.__viewerCanWrite = __viewerCanWrite;
+    // Clears every cached CRM dataset from this device. Used whenever the data
+    // owner changes (login as someone else, or access revoked) so a removed team
+    // member can never keep browsing the owner's cached data.
+    function wipeLocalCRM() {
+      CRM_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch(e){} });
+    }
+    window.wipeLocalCRM = wipeLocalCRM;
+    const SCOPE_KEY = 'crm_data_scope';
     window.CloudSync = {
       async pullToLocal() {
         const { data: u } = await sb.auth.getUser(); if (!u?.user) return false;
@@ -2082,11 +2092,13 @@
         window.EDITOR_MODE = false; window.EDITOR_OWNER_ID = null;
         window.CURRENT_EMAIL = (u.user.email || '').toLowerCase();
         window.CURRENT_UID = u.user.id;
+        let wasMember = false;
         try {
           const email = window.CURRENT_EMAIL;
           const { data: inv } = await sb.from('team_viewers').select('owner_id,permissions,role').ilike('viewer_email', email).limit(1).maybeSingle();
           if (inv && inv.owner_id && inv.owner_id !== u.user.id) {
             ownerId = inv.owner_id;
+            wasMember = true;
             if (inv.role === 'editor') {
               window.EDITOR_MODE = true;
               window.EDITOR_OWNER_ID = inv.owner_id;
@@ -2098,20 +2110,29 @@
           }
         } catch(e) { console.warn('team check failed', e); }
 
+        // If the data scope changed since the last session on this device
+        // (different owner, or membership revoked), drop the cached data first.
+        let prevScope = null;
+        try { prevScope = localStorage.getItem(SCOPE_KEY); } catch(e) {}
+        const scopeChanged = prevScope && prevScope !== ownerId;
+        if (scopeChanged) wipeLocalCRM();
+        try { localStorage.setItem(SCOPE_KEY, ownerId); } catch(e) {}
 
         const { data, error } = await sb.from('crm_cloud_data').select('data').eq('user_id', ownerId).maybeSingle();
         if (error) { console.warn('cloud pull error', error); return false; }
         if (data && data.data) {
           CRM_KEYS.forEach(k => { if (data.data[k] !== undefined) localStorage.setItem(k, JSON.stringify(data.data[k])); });
         } else if (!window.VIEWER_MODE && !window.EDITOR_MODE) {
-          // First login: seed cloud from whatever is local (may be empty).
+          // No cloud row yet. Never seed it from data that belonged to another
+          // scope — that would copy an ex-owner's data into this account.
+          if (scopeChanged) wipeLocalCRM();
           await window.CloudSync.pushFromLocal();
         }
+        void wasMember;
         return true;
       },
       async pushFromLocal() {
-        // Read-only viewers who lack the add permission cannot push
-        if (window.VIEWER_MODE && !__viewerCanWrite()) return;
+        if (window.VIEWER_MODE) return;
         const { data: u } = await sb.auth.getUser(); if (!u?.user) return;
         const targetId = (window.EDITOR_MODE || window.VIEWER_MODE) ? (window.EDITOR_OWNER_ID || window.VIEWER_OWNER_ID) : u.user.id;
         const payload = {};
@@ -2121,14 +2142,72 @@
       },
       _t: null,
       schedulePush() {
-        if (window.VIEWER_MODE && !__viewerCanWrite()) return;
+        if (window.VIEWER_MODE) return;
         clearTimeout(window.CloudSync._t);
         window.CloudSync._t = setTimeout(() => window.CloudSync.pushFromLocal(), 800);
       }
     };
 
   </script>
+
+  <!-- ===== UI polish layer (visual only) ===== -->
+  <style>
+    :root { --ui-shadow: 0 4px 16px rgba(15,23,42,.06); --ui-shadow-lg: 0 12px 32px rgba(15,23,42,.12); }
+    .card, .modal, .table-wrap {
+      border-radius: 16px !important;
+      box-shadow: var(--ui-shadow);
+      transition: box-shadow .22s ease, transform .22s ease;
+    }
+    .card:hover { box-shadow: var(--ui-shadow-lg); }
+    .btn {
+      border-radius: 11px !important;
+      transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
+    }
+    .btn:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .btn:active { transform: translateY(0) scale(.985); }
+    .btn:focus-visible, .form-group input:focus-visible, .form-group select:focus-visible, .form-group textarea:focus-visible {
+      outline: 2px solid #10b981; outline-offset: 2px;
+    }
+    .pill { border-radius: 999px !important; transition: background .18s ease, color .18s ease, transform .15s ease; }
+    .pill:hover { transform: translateY(-1px); }
+    table tbody tr { transition: background .15s ease; }
+    table tbody tr:hover { background: rgba(16,185,129,.06); }
+    .modal-overlay { backdrop-filter: blur(3px); }
+    .badge { border-radius: 999px !important; letter-spacing: .2px; }
+    .page-title { letter-spacing: -.3px; }
+    ::-webkit-scrollbar { width: 9px; height: 9px; }
+    ::-webkit-scrollbar-thumb { background: rgba(100,116,139,.35); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(100,116,139,.55); }
+    @media (max-width: 640px) {
+      .btn { min-height: 42px; }
+      .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .modal { border-radius: 18px 18px 0 0 !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; animation: none !important; }
+    }
+
+    /* Access-revoked lockout */
+    #revoked-overlay {
+      position: fixed; inset: 0; z-index: 99999;
+      background: rgba(15,23,42,.82); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    #revoked-overlay .revoked-card {
+      background: #fff; border-radius: 20px; padding: 28px 24px; max-width: 380px; width: 100%;
+      text-align: center; box-shadow: 0 24px 60px rgba(0,0,0,.35);
+    }
+    #revoked-overlay .revoked-icon { font-size: 44px; margin-bottom: 8px; }
+    #revoked-overlay h2 { margin: 0 0 8px; font-size: 20px; font-weight: 800; color: #0f172a; }
+    #revoked-overlay p { margin: 0 0 18px; font-size: 14px; color: #475569; line-height: 1.7; }
+    #revoked-overlay button {
+      background: #ef4444; color: #fff; border: 0; border-radius: 12px;
+      padding: 11px 22px; font: inherit; font-weight: 700; cursor: pointer;
+    }
+    #revoked-overlay button:hover { background: #dc2626; }
+  </style>
 </head>
+
 
 <body>
 
@@ -4238,9 +4317,18 @@
       attendance: ['الحضور والانصراف', 'تسجيل مواعيد حضور وانصراف الموظفين'],
     };
     function showPage(name) {
+      // Protect the route itself; hiding a navigation button is not access control.
+      if (window.VIEWER_MODE && typeof window.__viewerCanOpenPage === 'function' && !window.__viewerCanOpenPage(name)) {
+        if (typeof toast === 'function') toast('القسم ده مش ضمن صلاحياتك', '🔒');
+        const fallback = typeof window.__viewerFirstPage === 'function' ? window.__viewerFirstPage() : 'apartments';
+        if (fallback && fallback !== name) return showPage(fallback);
+        return;
+      }
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.getElementById('page-' + name).classList.add('active');
+      const page = document.getElementById('page-' + name);
+      if (!page || !titles[name]) return;
+      page.classList.add('active');
       document.getElementById('topbar-title').textContent = titles[name][0];
       document.getElementById('topbar-sub').textContent = titles[name][1];
       const icons = { dashboard: '📊', apartments: '🏢', clients: '👥', owners: '👤', notes: '📝', finance: '💰', reports: '📋', settings: '⚙️', attendance: '🕒' };
@@ -4556,6 +4644,11 @@
       return [...document.querySelectorAll('.apt-select:checked')].map(x => x.value);
     }
     function openAptModal(id) {
+      if (window.VIEWER_MODE) {
+        const existing = id ? apartments.find(a => a.id === id) : null;
+        const isOwn = !!(existing && existing.addedBy && window.CURRENT_EMAIL && existing.addedBy.toLowerCase() === window.CURRENT_EMAIL.toLowerCase());
+        if (!__viewerCanWrite() || (id && !isOwn)) { toast('غير مسموح لك بتنفيذ الإجراء ده', '🔒'); return; }
+      }
       editingAptId = id || null;
       document.getElementById('apt-modal-title').textContent = id ? 'تعديل الشقة' : 'إضافة شقة جديدة';
       const ownerSel = document.getElementById('apt-owner');
@@ -4657,6 +4750,11 @@
       apartments = apartments.filter(a => a.id !== id); if (__toDel) logAptAction('delete', __toDel); save(); updateBadges(); renderApartments(); toast('تم حذف الشقة', '🗑️');
     }
     function toggleAptPosted(id) {
+      if (window.VIEWER_MODE) {
+        const a = apartments.find(x => x.id === id);
+        const isOwn = !!(a && a.addedBy && window.CURRENT_EMAIL && a.addedBy.toLowerCase() === window.CURRENT_EMAIL.toLowerCase());
+        if (!__viewerCanWrite() || !isOwn) { toast('تقدر تغيّر حالة النشر للشقق اللي أضفتها بس', '🔒'); return; }
+      }
       apartments = apartments.map(a => {
         if (a.id !== id) return a;
         const np = !a.posted;
@@ -5382,8 +5480,8 @@
     function __viewerFinAllowed(fid) {
       if (!window.VIEWER_MODE) return true;
       const p = window.VIEWER_PERMS || {};
-      const allowed = Array.isArray(p.fin_apts_allowed) ? p.fin_apts_allowed : null;
-      return !allowed || allowed.includes(fid);
+      const allowed = Array.isArray(p.fin_apts_allowed) ? p.fin_apts_allowed : [];
+      return allowed.includes(fid);
     }
     function __viewerFinCanWrite() {
       if (!window.VIEWER_MODE) return true;
@@ -5475,6 +5573,7 @@
       document.getElementById('fin-apt-modal').classList.add('open');
     }
     function saveFinApt() {
+      if (editingFinAptId ? !__guardFinWrite() : !__guardFinAddApt()) return;
       const name = document.getElementById('fin-apt-name').value.trim();
       if (!name) { toast('أدخل اسم الشقة', '⚠️'); return; }
       const data = {
@@ -5492,10 +5591,10 @@
     }
 
     function deleteFinApt(id) {
+      if (!__guardFinWrite() || !__viewerFinAllowed(id)) return;
       if (!confirm('حذف الشقة وكل عملياتها؟')) return;
       const a = finApts.find(x => x.id === id);
       lastDeleted = { type: 'apt', data: JSON.parse(JSON.stringify(a)) };
-      if (!__guardFinWrite()) return;
       finApts = finApts.filter(x => x.id !== id);
       if (currentFinAptId === id) closeFinDetails();
       save(); renderFinApts(); showUndo('تم حذف الشقة');
@@ -5508,6 +5607,7 @@
       window._undoTimer = setTimeout(() => { document.getElementById('undo-toast').classList.remove('show'); lastDeleted = null; }, 6000);
     }
     function undoDelete() {
+      if (!__guardFinWrite()) return;
       if (!lastDeleted) return;
       if (lastDeleted.type === 'apt') { finApts.push(lastDeleted.data); }
       else if (lastDeleted.type === 'tx') {
@@ -5542,6 +5642,7 @@
     }
 
     function renderFinTxs() {
+      if (window.VIEWER_MODE && (!__viewerFinAllowed(currentFinAptId) || !window.__viewerCanOpenPage('finance'))) { closeFinDetails(); return; }
       const a = finApts.find(x => x.id === currentFinAptId); if (!a) return;
       const { tin, tout, bal } = finTotals(a);
       document.getElementById('fin-total-in').textContent = fmt(tin);
@@ -5604,7 +5705,7 @@
     <td>${t.category ? `<span class="tx-cat-tag">${t.category}</span>` : '—'}</td>
     <td class="tx-amt ${t.type}">${fmt(t.amount)} <small style="color:var(--gray-400);font-weight:400">ج.م</small></td>
     <td>${t.receipt ? `<img src="${t.receipt}" class="tx-thumb" onclick="viewReceipt('${t.id}')">` : '—'}</td>
-    <td class="tx-actions">
+    <td class="tx-actions" style="${__viewerFinCanWrite()?'':'display:none'}">
       <button onclick="printSingleTx('${t.id}')" title="طباعة إيصال">🖨️</button>
       <button onclick="editFinTx('${t.id}')" title="تعديل">✏️</button>
       <button onclick="deleteFinTx('${t.id}')" title="حذف" style="color:var(--red)">🗑️</button>
@@ -5641,6 +5742,7 @@
     }
 
     function openFinTxModal() {
+      if (!__guardFinWrite() || !__viewerFinAllowed(currentFinAptId)) return;
       if (!currentFinAptId) { toast('اختر شقة أولاً', '⚠️'); return; }
       editingFinTxId = null; currentReceiptB64 = null;
       document.getElementById('fin-tx-modal-title').textContent = 'إضافة عملية مالية';
@@ -5652,6 +5754,7 @@
       document.getElementById('fin-tx-modal').classList.add('open');
     }
     function editFinTx(id) {
+      if (!__guardFinWrite() || !__viewerFinAllowed(currentFinAptId)) return;
       const a = finApts.find(x => x.id === currentFinAptId); if (!a) return;
       const t = (a.tx || []).find(x => x.id === id); if (!t) return;
       editingFinTxId = id; currentReceiptB64 = t.receipt || null;
@@ -5668,6 +5771,7 @@
       document.getElementById('fin-tx-modal').classList.add('open');
     }
     function saveFinTx() {
+      if (!__guardFinWrite() || !__viewerFinAllowed(currentFinAptId)) return;
       const a = finApts.find(x => x.id === currentFinAptId); if (!a) return;
       const date = document.getElementById('fin-tx-date').value;
       const desc = document.getElementById('fin-tx-desc').value.trim();
@@ -5686,6 +5790,7 @@
       save(); closeModal('fin-tx-modal'); renderFinTxs(); renderFinApts();
     }
     function deleteFinTx(id) {
+      if (!__guardFinWrite() || !__viewerFinAllowed(currentFinAptId)) return;
       if (!confirm('حذف هذه العملية؟')) return;
       const a = finApts.find(x => x.id === currentFinAptId); if (!a) return;
       const t = (a.tx || []).find(x => x.id === id);
@@ -6286,7 +6391,8 @@
   body.viewer-mode #apts-table span[onclick*="toggleAptPosted"] { pointer-events: none; opacity: .85; }
   body.viewer-mode.viewer-can-write #apts-table span[onclick*="toggleAptPosted"] { pointer-events: auto; opacity: 1; }
   body.viewer-mode .nav-item[data-viewer-hide="1"],
-  body.viewer-mode .nav-label[data-viewer-hide="1"] { display: none !important; }
+  body.viewer-mode .nav-label[data-viewer-hide="1"],
+  body.viewer-mode .page[data-viewer-page-denied] { display: none !important; }
   body.viewer-mode .sidebar-user-role::after { content: " (عرض فقط)"; color: #f59e0b; }
   body.viewer-mode.viewer-can-write .sidebar-user-role::after { content: " (عرض + إضافة)"; color: #10b981; }
   .viewer-badge { display:inline-block;background:#f59e0b;color:#fff;padding:2px 10px;border-radius:999px;font-size:11px;font-weight:700;margin-right:8px }
@@ -6372,9 +6478,8 @@
       apt_cols: { code:true, owner:false, owner_phone:false, building:false, area:true, price:true, commission:false, floor:true, space:true, rooms:true, bathrooms:true, propType:true, finishing:true, facade:true, amenities:true, notes:true, images:true, status:true, client:true },
       can_add_apts: false,
       // Finance section:
-      // fin_apts_allowed = null OR [] means ALL finance apartments visible.
-      // Provide array of IDs to restrict.
-      fin_apts_allowed: null,
+      // Fail closed: an empty list means no finance apartments are visible.
+      fin_apts_allowed: [],
       fin_can_write: false,
       fin_can_add_apt: false
     };
@@ -6388,9 +6493,23 @@
       const cols  = (p.apt_cols && typeof p.apt_cols === 'object') ? p.apt_cols : {};
       const merged = {};
       APT_COLS.forEach(c => { merged[c.key] = (c.key in cols) ? !!cols[c.key] : DEFAULT_PERMS.apt_cols[c.key]; });
-      const finAllowed = Array.isArray(p.fin_apts_allowed) ? p.fin_apts_allowed : null;
+      const finAllowed = Array.isArray(p.fin_apts_allowed) ? p.fin_apts_allowed.filter(Boolean) : [];
       return { pages, apt_cols: merged, can_add_apts: !!p.can_add_apts, fin_apts_allowed: finAllowed, fin_can_write: !!p.fin_can_write, fin_can_add_apt: !!p.fin_can_add_apt };
     }
+
+    const PAGE_ALIASES = { finance:'finapts', finapts:'finapts' };
+    const PAGE_ROUTE = { finapts:'finance' };
+    function permissionPageKey(name) { return PAGE_ALIASES[name] || name; }
+    function routePageKey(name) { return PAGE_ROUTE[name] || name; }
+    window.__viewerCanOpenPage = function(name) {
+      if (!window.VIEWER_MODE) return true;
+      const p = normalizePerms(window.VIEWER_PERMS || {});
+      return p.pages.includes(permissionPageKey(name));
+    };
+    window.__viewerFirstPage = function() {
+      const p = normalizePerms(window.VIEWER_PERMS || {});
+      return routePageKey(p.pages[0] || 'apartments');
+    };
 
     function applyViewerMode() {
       if (!window.VIEWER_MODE) return;
@@ -6405,6 +6524,10 @@
       document.body.classList.toggle('client-mode', rawIsClient);
 
       const allowed = new Set(perms.pages);
+      document.querySelectorAll('.page').forEach(el => {
+        const routeName = (el.id || '').replace(/^page-/, '');
+        el.toggleAttribute('data-viewer-page-denied', !allowed.has(permissionPageKey(routeName)));
+      });
       document.querySelectorAll('.nav-item').forEach(el => {
         const t = (el.textContent || '').trim();
         const match = ALL_PAGES.find(p => p.match.test(t));
@@ -6421,7 +6544,7 @@
       if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'viewer-dyn-style'; document.head.appendChild(styleEl); }
       styleEl.textContent = sel;
       try {
-        const first = perms.pages[0] || 'apartments';
+        const first = routePageKey(perms.pages[0] || 'apartments');
         if (typeof showPage === 'function') showPage(first);
       } catch(e){}
       const topbar = document.querySelector('.topbar');
@@ -6463,6 +6586,30 @@
         }
       }
     }
+
+    // Hard lockout after access is revoked: wipe cached data, block the UI, sign out.
+    let __lockedOut = false;
+    function lockOutRevoked() {
+      if (__lockedOut) return;
+      __lockedOut = true;
+      try { if (typeof window.wipeLocalCRM === 'function') window.wipeLocalCRM(); } catch(e){}
+      try { localStorage.removeItem('crm_data_scope'); } catch(e){}
+      const ov = document.createElement('div');
+      ov.id = 'revoked-overlay';
+      ov.innerHTML = `
+        <div class="revoked-card">
+          <div class="revoked-icon">🔒</div>
+          <h2>تم إلغاء صلاحيتك</h2>
+          <p>مالك الحساب أزال حسابك من الفريق، فمش هتقدر تشوف البيانات تاني.</p>
+          <button type="button" id="revoked-out-btn">تسجيل الخروج</button>
+        </div>`;
+      document.body.appendChild(ov);
+      const finish = async () => { try { await sb.auth.signOut(); } catch(e){} location.reload(); };
+      ov.querySelector('#revoked-out-btn').addEventListener('click', finish);
+      setTimeout(finish, 6000);
+    }
+    window.lockOutRevoked = lockOutRevoked;
+
     window.applyViewerMode = applyViewerMode;
 
     // ===== Live permission refresh (no page reload needed) =====
@@ -6479,16 +6626,21 @@
           .select('owner_id,permissions,role').ilike('viewer_email', email).limit(1).maybeSingle();
 
         if (!inv || !inv.owner_id || inv.owner_id === u.user.id) {
-          // Access revoked → drop viewer mode
+          // Access revoked. Dropping viewer flags alone is NOT enough: the
+          // owner's data is still cached in localStorage, so the ex-member would
+          // suddenly see everything in full "owner" mode. Wipe the cache, lock
+          // the screen, and sign the session out.
           if (window.VIEWER_MODE || window.EDITOR_MODE) {
             window.VIEWER_MODE = false; window.VIEWER_OWNER_ID = null; window.VIEWER_PERMS = null;
             window.EDITOR_MODE = false; window.EDITOR_OWNER_ID = null;
             document.body.classList.remove('viewer-mode','viewer-can-write','client-mode');
             const b0 = document.getElementById('viewer-badge'); if (b0) b0.remove();
-            if (typeof toast === 'function') toast('⚠️ تم تعديل صلاحياتك');
+            lockOutRevoked();
           }
           return;
         }
+
+
 
         if (inv.role === 'editor') {
           window.EDITOR_MODE = true; window.EDITOR_OWNER_ID = inv.owner_id;
@@ -6717,15 +6869,15 @@
               <input type="checkbox" data-cap="fin_can_add_apt" ${perms.fin_can_add_apt?'checked':''}>
               <span><b>🏗️ إنشاء حساب شقة جديدة</b> — يقدر يضيف شقة جديدة في قسم الحسابات (مستقل عن صلاحية الكتابة في العمليات).</span>
             </label>
-            <div class="perms-sub" style="margin-top:10px">🏢 اختار الشقق اللي يقدر يشوف حساباتها (لو ماخترتش أي شقة معناها هيشوف كل الشقق):</div>
+            <div class="perms-sub" style="margin-top:10px">🏢 اختار الشقق اللي يقدر يشوف حساباتها (لو ماخترتش أي شقة مش هيشوف أي حساب):</div>
             <div class="perms-toolbar">
               <button type="button" onclick="__permsToggleAll('fin',true)">✔️ تحديد الكل</button>
               <button type="button" onclick="__permsToggleAll('fin',false)">✖️ إلغاء الكل</button>
             </div>
             <div class="perms-grid" id="__perms-fin-grid">
               ${(typeof finApts !== 'undefined' ? finApts : []).map(fa => {
-                const allowed = Array.isArray(perms.fin_apts_allowed) ? perms.fin_apts_allowed : null;
-                const checked = !allowed || allowed.includes(fa.id);
+                const allowed = Array.isArray(perms.fin_apts_allowed) ? perms.fin_apts_allowed : [];
+                const checked = allowed.includes(fa.id);
                 return `<label><input type="checkbox" data-fin="${fa.id}" ${checked?'checked':''}> ${fa.name || '—'}${fa.owner?' · '+fa.owner:''}</label>`;
               }).join('') || '<div style="color:var(--gray-500);font-size:12px">لا توجد شقق حسابات بعد</div>'}
             </div>
@@ -6762,8 +6914,8 @@
       // Collect fin apt selection
       const allFinCbs = Array.from(window.__permsBg.querySelectorAll('[data-fin]'));
       const checkedFin = allFinCbs.filter(cb => cb.checked).map(cb => cb.dataset.fin);
-      // If all boxes are checked (or none exist) => null means "all"
-      const fin_apts_allowed = (!allFinCbs.length || checkedFin.length === allFinCbs.length) ? null : checkedFin;
+      // Explicit allow-list only. Empty always means none; never interpret it as all.
+      const fin_apts_allowed = checkedFin;
       if (!pages.length) { alert('لازم تختار قسم واحد على الأقل'); return; }
       const { error } = await sb.from('team_viewers').update({ permissions: { pages, apt_cols, can_add_apts, fin_apts_allowed, fin_can_write, fin_can_add_apt } }).eq('id', id);
       if (error) { alert('خطأ: ' + error.message); return; }
@@ -6914,6 +7066,293 @@
     }, 300);
   })();
 </script>
+<!-- ══════════ UX UPGRADE LAYER (v2) ══════════ -->
+<style id="ux2-style">
+  :root{ --ux-accent:#2563eb; --ux-accent-soft:rgba(37,99,235,.12); }
+
+  /* ---------- General polish ---------- */
+  .topbar{ position:sticky; top:0; z-index:60; backdrop-filter:saturate(150%) blur(8px); }
+  .page{ animation: uxFade .22s ease both; }
+  @keyframes uxFade{ from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none} }
+  .nav-item{ border-radius:12px !important; margin-inline:8px; }
+  .nav-item.active{ box-shadow:0 4px 14px rgba(37,99,235,.20); }
+  .card-header{ position:sticky; }
+  .stat-card{ border-radius:16px !important; }
+  .btn{ gap:6px; }
+  .table-wrap table thead th{ position:sticky; top:0; z-index:2; background:var(--gray-100); }
+
+  /* ---------- Topbar search trigger ---------- */
+  .ux-search-btn{
+    display:flex; align-items:center; gap:8px; height:38px; padding:0 12px;
+    border:1.5px solid var(--gray-200); background:var(--white,#fff); color:var(--gray-500);
+    border-radius:12px; cursor:pointer; font:inherit; font-size:13px; min-width:180px;
+    transition:border-color .18s, box-shadow .18s;
+  }
+  .ux-search-btn:hover{ border-color:var(--ux-accent); box-shadow:0 0 0 4px var(--ux-accent-soft); }
+  .ux-search-btn kbd{
+    margin-inline-start:auto; font-size:10.5px; background:var(--gray-100); color:var(--gray-500);
+    border-radius:6px; padding:2px 6px; font-family:inherit;
+  }
+  @media (max-width:900px){ .ux-search-btn span.ux-sb-label,.ux-search-btn kbd{ display:none } .ux-search-btn{ min-width:0; width:38px; justify-content:center; padding:0 } }
+
+  /* ---------- Command palette ---------- */
+  #ux-palette{ position:fixed; inset:0; z-index:9998; display:none; }
+  #ux-palette.open{ display:block }
+  #ux-palette .ux-pal-bd{ position:absolute; inset:0; background:rgba(15,23,42,.45); backdrop-filter:blur(3px); }
+  #ux-palette .ux-pal-box{
+    position:relative; margin:9vh auto 0; width:min(620px,92vw); background:var(--white,#fff);
+    border-radius:18px; box-shadow:0 30px 70px rgba(2,6,23,.35); overflow:hidden;
+    animation:uxPop .18s ease both;
+  }
+  @keyframes uxPop{ from{opacity:0; transform:translateY(-10px) scale(.98)} to{opacity:1; transform:none} }
+  #ux-palette input{
+    width:100%; border:0; border-bottom:1.5px solid var(--gray-200); padding:16px 18px;
+    font:inherit; font-size:15.5px; background:transparent; color:var(--gray-800); outline:none;
+  }
+  #ux-pal-list{ max-height:52vh; overflow:auto; padding:8px; }
+  .ux-pal-group{ font-size:11px; font-weight:800; color:var(--gray-400); padding:8px 12px 4px; letter-spacing:.4px }
+  .ux-pal-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px;
+    cursor:pointer; font-size:13.5px; color:var(--gray-700);
+  }
+  .ux-pal-item .ux-pal-sub{ margin-inline-start:auto; font-size:11.5px; color:var(--gray-400) }
+  .ux-pal-item.sel, .ux-pal-item:hover{ background:var(--ux-accent-soft); color:var(--ux-accent) }
+  .ux-pal-empty{ padding:26px; text-align:center; color:var(--gray-400); font-size:13px }
+  #ux-palette .ux-pal-foot{
+    display:flex; gap:14px; padding:9px 14px; border-top:1px solid var(--gray-200);
+    font-size:11px; color:var(--gray-400);
+  }
+
+  /* ---------- Mobile bottom nav ---------- */
+  #ux-bottomnav{ display:none }
+  @media (max-width:900px){
+    #ux-bottomnav{
+      display:flex; position:fixed; inset-inline:0; bottom:0; z-index:80;
+      background:var(--white,#fff); border-top:1px solid var(--gray-200);
+      padding:6px 4px calc(6px + env(safe-area-inset-bottom)); box-shadow:0 -6px 20px rgba(15,23,42,.08);
+    }
+    #ux-bottomnav button{
+      flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+      background:transparent; border:0; font:inherit; font-size:10.5px; font-weight:700;
+      color:var(--gray-500); padding:6px 2px; border-radius:12px; cursor:pointer;
+    }
+    #ux-bottomnav button i{ font-style:normal; font-size:19px; line-height:1 }
+    #ux-bottomnav button.active{ color:var(--ux-accent); background:var(--ux-accent-soft) }
+    body{ padding-bottom:70px }
+    .main{ padding-bottom:70px }
+    #ux-fab{ bottom:84px !important }
+    body.client-mode #ux-bottomnav{ display:none }
+  }
+
+  /* ---------- FAB ---------- */
+  #ux-fab{
+    position:fixed; inset-inline-start:18px; bottom:22px; z-index:75;
+    width:54px; height:54px; border-radius:50%; border:0; cursor:pointer;
+    background:linear-gradient(135deg,#2563eb,#1d4ed8); color:#fff; font-size:26px; line-height:1;
+    box-shadow:0 12px 28px rgba(37,99,235,.42); display:none;
+    transition:transform .16s ease, box-shadow .16s ease;
+  }
+  #ux-fab:hover{ transform:translateY(-2px) rotate(90deg) }
+  #ux-fab.show{ display:block }
+  body.client-mode #ux-fab{ display:none !important }
+
+  /* ---------- Back to top ---------- */
+  #ux-top{
+    position:fixed; inset-inline-end:18px; bottom:22px; z-index:74;
+    width:42px; height:42px; border-radius:50%; border:1.5px solid var(--gray-200);
+    background:var(--white,#fff); color:var(--gray-600); font-size:17px; cursor:pointer;
+    box-shadow:0 8px 22px rgba(15,23,42,.14); opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  #ux-top.show{ opacity:1; pointer-events:auto }
+  @media (max-width:900px){ #ux-top{ bottom:84px } }
+
+  /* ---------- Toasts ---------- */
+  #ux-toasts{ position:fixed; top:14px; inset-inline-start:50%; transform:translateX(50%); z-index:99990; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none }
+  .ux-toast{
+    background:#0f172a; color:#fff; padding:10px 16px; border-radius:12px; font-size:13px; font-weight:600;
+    box-shadow:0 12px 30px rgba(2,6,23,.3); animation:uxToast .25s ease both; max-width:88vw;
+  }
+  .ux-toast.ok{ background:#15803d } .ux-toast.err{ background:#b91c1c }
+  @keyframes uxToast{ from{opacity:0; transform:translateY(-10px)} to{opacity:1; transform:none} }
+
+  /* ---------- Touch comfort ---------- */
+  @media (max-width:640px){
+    .action-btns .btn{ min-height:38px; min-width:38px }
+    .form-group input,.form-group select,.form-group textarea{ font-size:16px }
+    .pill{ padding:8px 13px !important }
+  }
+</style>
+
+<div id="ux-toasts"></div>
+<button id="ux-top" title="أعلى الصفحة">↑</button>
+<button id="ux-fab" title="إضافة سريعة">＋</button>
+<nav id="ux-bottomnav"></nav>
+<div id="ux-palette">
+  <div class="ux-pal-bd" data-ux-close></div>
+  <div class="ux-pal-box">
+    <input id="ux-pal-input" type="text" placeholder="ابحث عن شقة، عميل، مالك، أو صفحة…" autocomplete="off">
+    <div id="ux-pal-list"></div>
+    <div class="ux-pal-foot"><span>↑↓ تنقّل</span><span>Enter فتح</span><span>Esc خروج</span></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = s => document.querySelector(s);
+  const go = (p) => { try { showPage(p); } catch (e) {} };
+
+  /* ---------- Toast ---------- */
+  window.uxToast = function (msg, type) {
+    const w = $('#ux-toasts'); if (!w) return;
+    const t = document.createElement('div');
+    t.className = 'ux-toast' + (type ? ' ' + type : '');
+    t.textContent = msg; w.appendChild(t);
+    setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 320); }, 2600);
+  };
+
+  /* ---------- Bottom nav ---------- */
+  const TABS = [
+    { k: 'dashboard', i: '📊', t: 'الرئيسية' },
+    { k: 'apartments', i: '🏢', t: 'الشقق' },
+    { k: 'clients', i: '👥', t: 'العملاء' },
+    { k: 'finance', i: '💰', t: 'الحسابات' },
+    { k: '__more', i: '☰', t: 'المزيد' }
+  ];
+  const bn = $('#ux-bottomnav');
+  bn.innerHTML = TABS.map(t => `<button data-k="${t.k}"><i>${t.i}</i>${t.t}</button>`).join('');
+  bn.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    const k = b.dataset.k;
+    if (k === '__more') { try { openSidebar(); } catch (e) {} return; }
+    go(k);
+  });
+  function syncNav(name) {
+    bn.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.k === name));
+    const fab = $('#ux-fab');
+    const map = {
+      apartments: () => window.openAptModal && openAptModal(),
+      clients: () => window.openClientModal && openClientModal(),
+      owners: () => window.openOwnerModal && openOwnerModal(),
+      finance: () => window.openFinTxModal && openFinTxModal()
+    };
+    const canUse = !!map[name] && (!window.VIEWER_MODE || (name === 'apartments' ? __viewerCanWrite() : name === 'finance' ? __viewerFinCanWrite() : false));
+    fab.classList.toggle('show', canUse);
+    fab.onclick = canUse ? map[name] : null;
+  }
+
+  /* ---------- Wrap showPage ---------- */
+  const orig = window.showPage;
+  if (typeof orig === 'function') {
+    window.showPage = function (name) {
+      const r = orig.apply(this, arguments);
+      try { syncNav(name); window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+      return r;
+    };
+  }
+  syncNav('dashboard');
+
+  /* ---------- Back to top ---------- */
+  const topBtn = $('#ux-top');
+  topBtn.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.addEventListener('scroll', () => topBtn.classList.toggle('show', window.scrollY > 320), { passive: true });
+
+  /* ---------- Topbar search trigger ---------- */
+  const actions = document.querySelector('.topbar-actions');
+  if (actions) {
+    const b = document.createElement('button');
+    b.className = 'ux-search-btn';
+    b.innerHTML = '🔍 <span class="ux-sb-label">بحث سريع…</span><kbd>Ctrl K</kbd>';
+    b.onclick = openPalette;
+    actions.insertBefore(b, actions.firstChild);
+  }
+
+  /* ---------- Command palette ---------- */
+  const pal = $('#ux-palette'), inp = $('#ux-pal-input'), list = $('#ux-pal-list');
+  let items = [], sel = 0;
+
+  const PAGES = [
+    ['dashboard', '📊 لوحة التحكم'], ['apartments', '🏢 الشقق'], ['clients', '👥 العملاء'],
+    ['owners', '👤 الملاك'], ['notes', '📝 الملاحظات'], ['finance', '💰 الحسابات'],
+    ['reports', '📋 التقارير'], ['attendance', '🕒 الحضور والانصراف'], ['settings', '⚙️ الإعدادات']
+  ];
+
+  function visiblePages() {
+    return PAGES.filter(([k]) => {
+      const el = document.getElementById('page-' + k);
+      if (!el) return false;
+      if (window.VIEWER_MODE && typeof window.__viewerCanOpenPage === 'function' && !window.__viewerCanOpenPage(k)) return false;
+      const nav = [...document.querySelectorAll('.nav-item')].find(n => (n.getAttribute('onclick') || '').includes("'" + k + "'"));
+      return !nav || nav.offsetParent !== null || !document.body.classList.contains('client-mode');
+    });
+  }
+
+  function build(q) {
+    q = (q || '').trim().toLowerCase();
+    const out = [];
+    visiblePages().forEach(([k, t]) => {
+      if (!q || t.toLowerCase().includes(q)) out.push({ g: 'الصفحات', label: t, sub: '', run: () => go(k) });
+    });
+    if (q) {
+      const norm = v => String(v || '').toLowerCase();
+      const canSearchApartments = !window.VIEWER_MODE || (window.__viewerCanOpenPage && window.__viewerCanOpenPage('apartments'));
+      const visibleApartments = canSearchApartments ? (window.apartments || []).filter(a => {
+        if (!window.VIEWER_MODE) return true;
+        const mine = !!(a.addedBy && window.CURRENT_EMAIL && a.addedBy.toLowerCase() === window.CURRENT_EMAIL.toLowerCase());
+        return mine || !!a.isPublic;
+      }) : [];
+      visibleApartments.forEach(a => {
+        if ([a.code, a.building, a.area, a.propertyType].some(v => norm(v).includes(q)))
+          out.push({
+            g: 'الشقق', label: '🏢 ' + (a.code || '—') + ' — ' + (a.building || ''),
+            sub: a.area || '', run: () => { go('apartments'); setTimeout(() => { try { openAptDetails ? openAptDetails(a.id) : null; } catch (e) {} }, 220); }
+          });
+      });
+      const canSearchClients = !window.VIEWER_MODE || (window.__viewerCanOpenPage && window.__viewerCanOpenPage('clients'));
+      (canSearchClients ? (window.clients || []) : []).forEach(c => {
+        if ([c.name, c.phone].some(v => norm(v).includes(q)))
+          out.push({ g: 'العملاء', label: '👥 ' + (c.name || '—'), sub: c.phone || '', run: () => go('clients') });
+      });
+      const canSearchOwners = !window.VIEWER_MODE || (window.__viewerCanOpenPage && window.__viewerCanOpenPage('owners'));
+      (canSearchOwners ? (window.owners || []) : []).forEach(o => {
+        if ([o.name, o.phone].some(v => norm(v).includes(q)))
+          out.push({ g: 'الملاك', label: '👤 ' + (o.name || '—'), sub: o.phone || '', run: () => go('owners') });
+      });
+    }
+    return out.slice(0, 40);
+  }
+
+  function render() {
+    if (!items.length) { list.innerHTML = '<div class="ux-pal-empty">مفيش نتائج مطابقة</div>'; return; }
+    let html = '', last = '';
+    items.forEach((it, i) => {
+      if (it.g !== last) { html += `<div class="ux-pal-group">${it.g}</div>`; last = it.g; }
+      html += `<div class="ux-pal-item${i === sel ? ' sel' : ''}" data-i="${i}">${it.label}<span class="ux-pal-sub">${it.sub || ''}</span></div>`;
+    });
+    list.innerHTML = html;
+  }
+
+  function refresh() { items = build(inp.value); sel = 0; render(); }
+  function openPalette() { pal.classList.add('open'); inp.value = ''; refresh(); setTimeout(() => inp.focus(), 40); }
+  function closePalette() { pal.classList.remove('open'); }
+  function runSel() { const it = items[sel]; if (!it) return; closePalette(); it.run(); }
+
+  inp.addEventListener('input', refresh);
+  list.addEventListener('click', e => { const el = e.target.closest('.ux-pal-item'); if (!el) return; sel = +el.dataset.i; runSel(); });
+  pal.addEventListener('click', e => { if (e.target.hasAttribute('data-ux-close')) closePalette(); });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); sel = Math.min(sel + 1, items.length - 1); render(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); sel = Math.max(sel - 1, 0); render(); }
+    else if (e.key === 'Enter') { e.preventDefault(); runSel(); }
+    else if (e.key === 'Escape') { closePalette(); }
+  });
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); pal.classList.contains('open') ? closePalette() : openPalette(); }
+    if (e.key === 'Escape' && pal.classList.contains('open')) closePalette();
+  });
+  window.uxOpenSearch = openPalette;
+})();
+</script>
+
 </body>
 
 </html>
